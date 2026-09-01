@@ -67,8 +67,17 @@ Você **não** precisa ligar o Chrome agora. Depois de `npm run dev`:
 1. Abra o CRM.
 2. Clique em **Descobrir leads simulados** (cria perfis de exemplo a partir do ICP, sem abrir o Instagram).
 3. Abra um lead e clique em **Enfileirar primeiro contato**.
+4. No lead, use **Simular pergunta / opt-in / opt-out** para gravar um inbound falso (lock de canal, heurística/OpenAI e DNC) sem webhook da Meta.
 
 O worker usa o fake CDP e **não** clica em Enviar. Quando for usar o Instagram de verdade, use o comando Linux da seção 7 e deixe `INSTAGRAM_LIVE_SEND=false` até ter certeza.
+
+## 3.2 Quando você estiver pronto (credenciais)
+
+Nada disto é necessário para o dry-run da seção 3.1. Não cole chaves neste arquivo nem no git.
+
+1. **OpenAI** — chave Restricted num projeto separado e o mesmo teto em `OPENAI_MONTHLY_BUDGET_USD`. Sem a chave, o motor usa heurística. Passo a passo na seção 5.
+2. **Webhook Meta** — URL pública `https://SEU_DOMINIO/webhooks/instagram` e os tokens da seção 6. Sem isso, o botão **Simular resposta** no lead substitui o POST da Meta no ambiente local.
+3. **Chrome do operador** — perfil dedicado com `--remote-debugging-port=9222` (seção 7). Sem `CHROME_CDP_URL`, o primeiro contato continua em fake CDP. Live send só com `INSTAGRAM_LIVE_SEND=true` **e** o Chrome aberto.
 
 ## 4. Pausa geral
 
@@ -154,7 +163,7 @@ Desligar o live send: `INSTAGRAM_LIVE_SEND=false` (ou apague a linha). Sem a URL
 
 ## 8. Experimentos
 
-No CRM, experimentos aceitam **exatamente uma variante** além do controle. Não há declaração de vencedor antes de `sample_size`. Atribuição fica em `leads.experiment_id` / `experiment_variant`.
+No CRM, o formulário cria **exatamente uma variante** contra o controle. **Declarar** vencedor recusa se a amostra (`assignedCount`) for menor que `sample_size`. Atribuição fica em `leads.experiment_id` / `experiment_variant`.
 
 ## 9. O que este sistema não faz
 
