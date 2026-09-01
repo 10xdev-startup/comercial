@@ -7,8 +7,11 @@
  * Does nothing useful without SUPABASE_ACCESS_TOKEN + project ref.
  * Never prints secrets.
  */
-const fs = require('fs')
-const path = require('path')
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
 function loadEnv(file) {
   if (!fs.existsSync(file)) return
@@ -24,7 +27,7 @@ function loadEnv(file) {
   }
 }
 
-loadEnv(path.resolve(__dirname, '..', 'backend', '.env'))
+loadEnv(path.resolve(scriptDir, '..', 'backend', '.env'))
 
 const url = process.env.SUPABASE_URL || ''
 const token = process.env.SUPABASE_ACCESS_TOKEN || ''
@@ -44,11 +47,11 @@ if (!projectRef || isPlaceholder(token)) {
   process.exit(1)
 }
 
-const sqlPath = path.resolve(__dirname, '..', 'backend', 'src', 'database', 'crm-schema.sql')
+const sqlPath = path.resolve(scriptDir, '..', 'backend', 'src', 'database', 'crm-schema.sql')
 const query = fs.readFileSync(sqlPath, 'utf8')
 const endpoint = `https://api.supabase.com/v1/projects/${projectRef}/database/query`
 
-fetch(endpoint, {
+const response = await fetch(endpoint, {
   method: 'POST',
   headers: {
     Authorization: `Bearer ${token}`,
@@ -56,16 +59,11 @@ fetch(endpoint, {
   },
   body: JSON.stringify({ query }),
 })
-  .then(async (res) => {
-    const body = await res.text()
-    if (!res.ok) {
-      console.error(`Falha HTTP ${res.status} ao aplicar schema (corpo omitido se parecer token).`)
-      console.error(body.slice(0, 500))
-      process.exit(1)
-    }
-    console.log(`Schema CRM aplicado no projeto ${projectRef}.`)
-  })
-  .catch((err) => {
-    console.error('Falha de rede ao aplicar schema:', err instanceof Error ? err.message : err)
-    process.exit(1)
-  })
+
+const body = await response.text()
+if (!response.ok) {
+  console.error(`Falha HTTP ${response.status} ao aplicar schema (corpo omitido se parecer token).`)
+  console.error(body.slice(0, 500))
+  process.exit(1)
+}
+console.log(`Schema CRM aplicado no projeto ${projectRef}.`)
