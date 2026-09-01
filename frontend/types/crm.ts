@@ -68,6 +68,22 @@ export interface SystemState {
 export interface CrmMetrics {
   leadCount: number
   activeCustomerCount: number
+  aiCostUsdThisMonth: number
+  aiCostPerLead: number
+}
+
+export type InboundScenario = "question" | "opt_in" | "opt_out" | "restriction"
+
+export interface ExperimentSummary {
+  id: string
+  name: string
+  hypothesis: string
+  status: "draft" | "running" | "concluded"
+  controlVariant: string
+  variants: string[]
+  sampleSize: number
+  winner: string | null
+  assignedCount: number
 }
 
 export interface JobSummary {
@@ -99,6 +115,24 @@ export interface PublicCrmConfig {
   howItWorks: string[]
   revenueModel: string
   geography: string
+  instagramLiveSend: boolean
+}
+
+export interface CrmReadiness {
+  supabaseConfigured: boolean
+  openaiKeyPresent: boolean
+  instagramAppSecretPresent: boolean
+  instagramPageTokenPresent: boolean
+  instagramLiveSend: boolean
+  chromeCdpConfigured: boolean
+  chromeCdpReachable: boolean
+  workerPaused: boolean
+  pauseReason: string | null
+  webhookUrlHint: string
+  webhookPath: string
+  maxDmsPerDay: number
+  operatingHours: string
+  operatingTimezone: string
 }
 
 export const CLIENT_PIPELINE_ORDER: ClientPipelineState[] = [

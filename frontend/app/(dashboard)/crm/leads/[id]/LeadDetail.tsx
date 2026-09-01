@@ -8,26 +8,141 @@ import { Input } from "@/components/ui/input"
 import { crmService } from "@/services/crmService"
 import { ApiRequestError } from "@/services/apiErrors"
 import { channelLabel, pipelineLabel } from "@/lib/pipelineLabels"
-import { CLIENT_PIPELINE_ORDER, type LeadDetailResponse, type PublicCrmConfig } from "@/types/crm"
+import { pausedSystemCopy } from "@/lib/pauseReasons"
+import {
+  CLIENT_PIPELINE_ORDER,
+  type InboundScenario,
+  type LeadDetailResponse,
+  type PublicCrmConfig,
+  type SystemState,
+} from "@/types/crm"
+
+export type FirstContactActionsProps = {
+  paused: boolean
+  pauseReason: string | null
+  canEnqueue: boolean
+  enqueueing: boolean
+  liveSend: boolean
+  onEnqueue: () => void
+}
+
+export function FirstVisitHelper() {
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="first-visit-helper">
+      Nesta ficha: 1) Enfileirar primeiro contato (dry-run). 2) Simular pergunta / opt-in / opt-out — sem Meta e sem Chrome.
+    </p>
+  )
+}
+
+export function WhatsappHandoff({ whatsappLink }: { whatsappLink: string }) {
+  return (
+    <div className="space-y-1">
+      <Button asChild size="sm">
+        <a href={whatsappLink} target="_blank" rel="noreferrer">
+          Encaminhar ao WhatsApp
+        </a>
+      </Button>
+      <p className="break-all text-xs text-muted-foreground" data-testid="whatsapp-handoff-url">
+        {whatsappLink}
+      </p>
+    </div>
+  )
+}
+
+export function FirstContactActions({
+  paused,
+  pauseReason,
+  canEnqueue,
+  enqueueing,
+  liveSend,
+  onEnqueue,
+}: FirstContactActionsProps) {
+  const disabled = paused || !canEnqueue || enqueueing
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+      <p className="text-sm font-medium">Passo 1 — Enfileirar primeiro contato</p>
+      <p className="text-xs text-muted-foreground">
+        Comece por aqui na primeira visita. Dry-run: não precisa de Chrome nem de Meta.
+      </p>
+      <Button type="button" size="sm" disabled={disabled} onClick={onEnqueue}>
+        Enfileirar primeiro contato
+      </Button>
+      {paused ? (
+        <p className="text-xs text-muted-foreground">{pausedSystemCopy(pauseReason)}</p>
+      ) : liveSend ? (
+        <p className="text-xs text-muted-foreground">
+          INSTAGRAM_LIVE_SEND está ligado. Só clique se o Chrome do operador estiver aberto em 127.0.0.1.
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Dry-run: o worker não clica em Enviar no Instagram, a menos que você ligue INSTAGRAM_LIVE_SEND=true
+          no Chrome do operador (veja SETUP.md).
+        </p>
+      )}
+    </div>
+  )
+}
+
+const SIMULATE_BUTTONS: { scenario: InboundScenario; label: string }[] = [
+  { scenario: "question", label: "Simular pergunta" },
+  { scenario: "opt_in", label: "Simular opt-in (WhatsApp)" },
+  { scenario: "opt_out", label: "Simular opt-out" },
+  { scenario: "restriction", label: "Simular restrição" },
+]
+
+export type SimulateInboundActionsProps = {
+  simulating: boolean
+  onSimulate: (scenario: InboundScenario) => void
+}
+
+export function SimulateInboundActions({ simulating, onSimulate }: SimulateInboundActionsProps) {
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+      <p className="text-sm font-medium">Passo 2 — Simular resposta do Instagram</p>
+      <p className="text-xs text-muted-foreground">
+        Depois do passo 1. POST falso no webhook oficial. Sem Meta e sem Chrome: demonstra lock de canal,
+        OpenAI/heurística e DNC. O worker precisa estar rodando para interpretar a resposta.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {SIMULATE_BUTTONS.map((item) => (
+          <Button
+            key={item.scenario}
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={simulating}
+            onClick={() => onSimulate(item.scenario)}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export function LeadDetail() {
   const params = useParams<{ id: string }>()
   const leadId = typeof params.id === "string" ? params.id : ""
   const [data, setData] = useState<LeadDetailResponse | null>(null)
   const [config, setConfig] = useState<PublicCrmConfig | null>(null)
+  const [status, setStatus] = useState<SystemState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
+  const [enqueueing, setEnqueueing] = useState(false)
+  const [simulating, setSimulating] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!leadId) return
     let active = true
-    void Promise.all([crmService.getLead(leadId), crmService.getConfig()]).then(
-      ([detail, nextConfig]) => {
+    void Promise.all([crmService.getLead(leadId), crmService.getConfig(), crmService.getStatus()]).then(
+      ([detail, nextConfig, nextStatus]) => {
         if (!active) return
         setData(detail)
         setConfig(nextConfig)
+        setStatus(nextStatus)
         setError(null)
       },
       (err: unknown) => {
@@ -71,6 +186,11 @@ export function LeadDetail() {
           <span className="rounded-full bg-muted px-2 py-1">{pipelineLabel(lead.pipelineState)}</span>
           <span className="rounded-full bg-muted px-2 py-1">{channelLabel(lead.channelState)}</span>
           <span className="rounded-full bg-muted px-2 py-1">Canal dono: {conversation.channelOwner}</span>
+          {conversation.messagingWindowExpiresAt && (
+            <span className="rounded-full bg-muted px-2 py-1">
+              Janela API até {new Date(conversation.messagingWindowExpiresAt).toLocaleString("pt-BR")}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 pt-2">
           <Button asChild variant="outline" size="sm">
@@ -78,14 +198,47 @@ export function LeadDetail() {
               Abrir Instagram
             </a>
           </Button>
-          {config && (
-            <Button asChild size="sm">
-              <a href={config.whatsappLink} target="_blank" rel="noreferrer">
-                Encaminhar ao WhatsApp
-              </a>
-            </Button>
-          )}
+          {config && <WhatsappHandoff whatsappLink={config.whatsappLink} />}
         </div>
+        <FirstVisitHelper />
+        <FirstContactActions
+          paused={status?.paused === true}
+          pauseReason={status?.pauseReason ?? null}
+          canEnqueue={
+            lead.channelState === "browser_contact_pending" && conversation.channelOwner !== "api"
+          }
+          enqueueing={enqueueing}
+          liveSend={config?.instagramLiveSend === true}
+          onEnqueue={() => {
+            setEnqueueing(true)
+            void crmService.enqueueFirstContact(lead.id).then(
+              () => {
+                setEnqueueing(false)
+                reload()
+              },
+              (err: unknown) => {
+                setError(err instanceof ApiRequestError ? err.message : "Falha ao enfileirar o primeiro contato")
+                setEnqueueing(false)
+              },
+            )
+          }}
+        />
+        <SimulateInboundActions
+          simulating={simulating}
+          onSimulate={(scenario) => {
+            setSimulating(true)
+            void crmService.simulateInbound(lead.id, scenario).then(
+              () => {
+                setSimulating(false)
+                reload()
+              },
+              (err: unknown) => {
+                setError(err instanceof ApiRequestError ? err.message : "Falha ao simular a resposta")
+                setSimulating(false)
+              },
+            )
+          }}
+        />
       </header>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

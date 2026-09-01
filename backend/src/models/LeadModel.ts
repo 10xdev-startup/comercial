@@ -34,6 +34,10 @@ export interface UpdateLeadInput {
   channelState?: ChannelState
   nextAction?: string | null
   score?: number
+  lastContactedAt?: string
+  origin?: string
+  experimentId?: string | null
+  experimentVariant?: string | null
 }
 
 function escapeIlike(value: string): string {
@@ -53,6 +57,23 @@ export const LeadModel = {
     const { data, error } = await supabase.from('leads').select(LEAD_COLUMNS).eq('id', id).maybeSingle()
     if (error) throw new Error(error.message)
     return data ? rowToLead(data as LeadRow) : null
+  },
+
+  async findByOrigin(origin: string): Promise<Lead | null> {
+    if (useMemory()) return getMemoryStore().findLeadByOrigin(origin)
+    const { data, error } = await supabase.from('leads').select(LEAD_COLUMNS).eq('origin', origin).maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? rowToLead(data as LeadRow) : null
+  },
+
+  async countByExperiment(experimentId: string): Promise<number> {
+    if (useMemory()) return getMemoryStore().countLeadsByExperiment(experimentId)
+    const { count, error } = await supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('experiment_id', experimentId)
+    if (error) throw new Error(error.message)
+    return count ?? 0
   },
 
   async findByHandle(handle: string): Promise<Lead | null> {
@@ -151,6 +172,10 @@ export const LeadModel = {
         channelState: patch.channelState ?? current.channelState,
         nextAction: patch.nextAction !== undefined ? patch.nextAction : current.nextAction,
         score: patch.score ?? current.score,
+        lastContactedAt: patch.lastContactedAt !== undefined ? patch.lastContactedAt : current.lastContactedAt,
+        origin: patch.origin !== undefined ? patch.origin : current.origin,
+        experimentId: patch.experimentId !== undefined ? patch.experimentId : current.experimentId,
+        experimentVariant: patch.experimentVariant !== undefined ? patch.experimentVariant : current.experimentVariant,
         updatedAt: new Date().toISOString(),
       }
       return getMemoryStore().saveLead(next)
@@ -161,6 +186,10 @@ export const LeadModel = {
     if (patch.channelState !== undefined) fields['channel_state'] = patch.channelState
     if (patch.nextAction !== undefined) fields['next_action'] = patch.nextAction
     if (patch.score !== undefined) fields['score'] = patch.score
+    if (patch.lastContactedAt !== undefined) fields['last_contacted_at'] = patch.lastContactedAt
+    if (patch.origin !== undefined) fields['origin'] = patch.origin
+    if (patch.experimentId !== undefined) fields['experiment_id'] = patch.experimentId
+    if (patch.experimentVariant !== undefined) fields['experiment_variant'] = patch.experimentVariant
     const { data, error } = await supabase.from('leads').update(fields).eq('id', id).select(LEAD_COLUMNS).single()
     if (error) throw new Error(error.message)
     return rowToLead(data as LeadRow)
@@ -192,13 +221,46 @@ export const LeadModel = {
     return ((data ?? []) as MessageRow[]).map(rowToMessage)
   },
 
+  async updateConversation(
+    leadId: string,
+    patch: { channelOwner?: Conversation['channelOwner']; messagingWindowExpiresAt?: string | null },
+  ): Promise<Conversation> {
+    const current = await LeadModel.getOrCreateConversation(leadId)
+    const next: Conversation = {
+      ...current,
+      channelOwner: patch.channelOwner ?? current.channelOwner,
+      messagingWindowExpiresAt:
+        patch.messagingWindowExpiresAt !== undefined ? patch.messagingWindowExpiresAt : current.messagingWindowExpiresAt,
+      updatedAt: new Date().toISOString(),
+    }
+    if (useMemory()) return getMemoryStore().saveConversation(next)
+    const fields: Record<string, unknown> = { updated_at: next.updatedAt }
+    if (patch.channelOwner !== undefined) fields['channel_owner'] = patch.channelOwner
+    if (patch.messagingWindowExpiresAt !== undefined) fields['messaging_window_expires_at'] = patch.messagingWindowExpiresAt
+    const { data, error } = await supabase.from('conversations').update(fields).eq('id', current.id).select('*').single()
+    if (error) throw new Error(error.message)
+    return rowToConversation(data as ConversationRow)
+  },
+
+  async findMessageByExternalId(externalId: string): Promise<Message | null> {
+    if (useMemory()) return getMemoryStore().findMessageByExternalId(externalId)
+    const { data, error } = await supabase.from('messages').select('*').eq('external_id', externalId).maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? rowToMessage(data as MessageRow) : null
+  },
+
   async appendMessage(input: {
     leadId: string
     body: string
     direction?: Message['direction']
     source?: Message['source']
     jobId?: string | null
+    externalId?: string | null
   }): Promise<Message> {
+    if (input.externalId) {
+      const existing = await LeadModel.findMessageByExternalId(input.externalId)
+      if (existing) return existing
+    }
     const conversation = await LeadModel.getOrCreateConversation(input.leadId)
     const message: Message = {
       id: randomUUID(),
@@ -209,25 +271,29 @@ export const LeadModel = {
       body: input.body,
       variant: null,
       jobId: input.jobId ?? null,
-      externalId: null,
+      externalId: input.externalId ?? null,
       createdAt: new Date().toISOString(),
     }
     if (useMemory()) return getMemoryStore().insertMessage(message)
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        id: message.id,
-        conversation_id: message.conversationId,
-        lead_id: message.leadId,
-        direction: message.direction,
-        source: message.source,
-        body: message.body,
-        job_id: message.jobId,
-        created_at: message.createdAt,
-      })
-      .select('*')
-      .single()
-    if (error) throw new Error(error.message)
+    const insert: Record<string, unknown> = {
+      id: message.id,
+      conversation_id: message.conversationId,
+      lead_id: message.leadId,
+      direction: message.direction,
+      source: message.source,
+      body: message.body,
+      job_id: message.jobId,
+      created_at: message.createdAt,
+    }
+    if (message.externalId) insert['external_id'] = message.externalId
+    const { data, error } = await supabase.from('messages').insert(insert).select('*').single()
+    if (error) {
+      if (error.code === '23505' && input.externalId) {
+        const dup = await LeadModel.findMessageByExternalId(input.externalId)
+        if (dup) return dup
+      }
+      throw new Error(error.message)
+    }
     return rowToMessage(data as MessageRow)
   },
 }

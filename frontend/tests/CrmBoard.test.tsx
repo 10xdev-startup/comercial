@@ -1,7 +1,7 @@
 import { describe, it, expect, jest } from "@jest/globals"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { CrmBoardView } from "@/app/(dashboard)/crm/CrmBoard"
-import type { Lead } from "@/types/crm"
+import { CrmBoardView, type CrmBoardViewProps } from "@/app/(dashboard)/crm/CrmBoard"
+import type { CrmReadiness, ExperimentSummary, Lead } from "@/types/crm"
 
 const lead: Lead = {
   id: "lead-1",
@@ -22,21 +22,61 @@ const lead: Lead = {
   updatedAt: "2026-09-01T12:00:00.000Z",
 }
 
+const readiness: CrmReadiness = {
+  supabaseConfigured: false,
+  openaiKeyPresent: false,
+  instagramAppSecretPresent: false,
+  instagramPageTokenPresent: false,
+  instagramLiveSend: false,
+  chromeCdpConfigured: false,
+  chromeCdpReachable: false,
+  workerPaused: false,
+  pauseReason: null,
+  webhookUrlHint: "https://SEU_DOMINIO/webhooks/instagram",
+  webhookPath: "/webhooks/instagram",
+  maxDmsPerDay: 12,
+  operatingHours: "10:00-18:00",
+  operatingTimezone: "America/Fortaleza",
+}
+
+function boardProps(overrides: Partial<CrmBoardViewProps> = {}): CrmBoardViewProps {
+  return {
+    columns: { discovered: [lead] },
+    metrics: { leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 },
+    status: { paused: false, pauseReason: null, updatedAt: "2026-09-01T12:00:00.000Z" },
+    jobs: [],
+    experiments: [],
+    error: null,
+    loading: false,
+    pausing: false,
+    creating: false,
+    discovering: false,
+    onRefresh: () => undefined,
+    onTogglePause: () => undefined,
+    onCreateLead: () => undefined,
+    onDiscoverLeads: () => undefined,
+    ...overrides,
+  }
+}
+
 describe("CrmBoardView", () => {
   it("mostra o kanban de clientes em PT-BR e o botão de pausa", () => {
     render(
       <CrmBoardView
         columns={{ discovered: [lead] }}
-        metrics={{ leadCount: 1, activeCustomerCount: 0 }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
         status={{ paused: false, pauseReason: null, updatedAt: "2026-09-01T12:00:00.000Z" }}
         jobs={[]}
+        experiments={[]}
         error={null}
         loading={false}
         pausing={false}
         creating={false}
+        discovering={false}
         onRefresh={() => undefined}
         onTogglePause={() => undefined}
         onCreateLead={() => undefined}
+        onDiscoverLeads={() => undefined}
       />,
     )
     expect(screen.getByRole("heading", { name: "CRM de clientes" })).toBeInTheDocument()
@@ -45,6 +85,7 @@ describe("CrmBoardView", () => {
     expect(screen.queryByText("Afiliados")).not.toBeInTheDocument()
     expect(screen.queryByText("Entrou no grupo")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Pausar sistema" })).toBeInTheDocument()
+    expect(screen.getByText("Custo de IA no mês")).toBeInTheDocument()
   })
 
   it("pausa o sistema pelo botão", () => {
@@ -52,19 +93,170 @@ describe("CrmBoardView", () => {
     render(
       <CrmBoardView
         columns={{ discovered: [lead] }}
-        metrics={{ leadCount: 1, activeCustomerCount: 0 }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
         status={{ paused: false, pauseReason: null, updatedAt: "2026-09-01T12:00:00.000Z" }}
         jobs={[]}
+        experiments={[]}
         error={null}
         loading={false}
         pausing={false}
         creating={false}
+        discovering={false}
         onRefresh={() => undefined}
         onTogglePause={onTogglePause}
         onCreateLead={() => undefined}
+        onDiscoverLeads={() => undefined}
       />,
     )
     fireEvent.click(screen.getByRole("button", { name: "Pausar sistema" }))
     expect(onTogglePause).toHaveBeenCalledTimes(1)
+  })
+
+  it("enfileira descoberta simulada e desativa o botão quando pausado", () => {
+    const onDiscoverLeads = jest.fn()
+    const { rerender } = render(
+      <CrmBoardView
+        columns={{ discovered: [lead] }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
+        status={{ paused: false, pauseReason: null, updatedAt: "2026-09-01T12:00:00.000Z" }}
+        jobs={[]}
+        experiments={[]}
+        error={null}
+        loading={false}
+        pausing={false}
+        creating={false}
+        discovering={false}
+        onRefresh={() => undefined}
+        onTogglePause={() => undefined}
+        onCreateLead={() => undefined}
+        onDiscoverLeads={onDiscoverLeads}
+      />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Descobrir leads simulados" }))
+    expect(onDiscoverLeads).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <CrmBoardView
+        columns={{ discovered: [lead] }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
+        status={{ paused: true, pauseReason: "manual", updatedAt: "2026-09-01T12:00:00.000Z" }}
+        jobs={[]}
+        experiments={[]}
+        error={null}
+        loading={false}
+        pausing={false}
+        creating={false}
+        discovering={false}
+        onRefresh={() => undefined}
+        onTogglePause={() => undefined}
+        onCreateLead={() => undefined}
+        onDiscoverLeads={onDiscoverLeads}
+      />,
+    )
+    expect(screen.getByRole("button", { name: "Descobrir leads simulados" })).toBeDisabled()
+    expect(screen.getAllByText("Pausa manual").length).toBeGreaterThan(0)
+  })
+
+  it("mostra o motivo da pausa por orçamento, restrição e circuit breaker", () => {
+    const { rerender } = render(
+      <CrmBoardView {...boardProps({ status: { paused: true, pauseReason: "openai_budget", updatedAt: "2026-09-01T12:00:00.000Z" } })} />,
+    )
+    expect(screen.getAllByText("Orçamento da OpenAI no mês atingido").length).toBeGreaterThan(0)
+    rerender(
+      <CrmBoardView {...boardProps({ status: { paused: true, pauseReason: "instagram_restriction", updatedAt: "2026-09-01T12:00:00.000Z" } })} />,
+    )
+    expect(screen.getAllByText("Restrição ou checkpoint do Instagram").length).toBeGreaterThan(0)
+    rerender(
+      <CrmBoardView {...boardProps({ status: { paused: true, pauseReason: "error_spike", updatedAt: "2026-09-01T12:00:00.000Z" } })} />,
+    )
+    expect(screen.getAllByText("Pico de erros (circuit breaker)").length).toBeGreaterThan(0)
+    expect(screen.queryByText("openai_budget")).not.toBeInTheDocument()
+    expect(screen.queryByText("error_spike")).not.toBeInTheDocument()
+  })
+
+  it("cria um experimento de uma variante e recusa vencedor com amostra pequena", () => {
+    const onCreateExperiment = jest.fn()
+    const onDeclareWinner = jest.fn()
+    const experiment: ExperimentSummary = {
+      id: "exp-1",
+      name: "CTA WhatsApp",
+      hypothesis: "zap no primeiro reply",
+      status: "running",
+      controlVariant: "control",
+      variants: ["wa-first"],
+      sampleSize: 20,
+      winner: null,
+      assignedCount: 1,
+    }
+    render(
+      <CrmBoardView
+        {...boardProps({
+          experiments: [experiment],
+          error: "Amostra insuficiente para declarar vencedor",
+          onCreateExperiment,
+          onDeclareWinner,
+        })}
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText("CTA WhatsApp"), { target: { value: "abertura" } })
+    fireEvent.change(screen.getByPlaceholderText("zap no primeiro reply converte mais"), {
+      target: { value: "tom curto" },
+    })
+    fireEvent.change(screen.getByPlaceholderText("wa-first"), { target: { value: "short" } })
+    fireEvent.click(screen.getByRole("button", { name: "Criar experimento" }))
+    expect(onCreateExperiment).toHaveBeenCalledWith({
+      name: "abertura",
+      hypothesis: "tom curto",
+      variant: "short",
+      sampleSize: 20,
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Declarar wa-first" }))
+    expect(onDeclareWinner).toHaveBeenCalledWith("exp-1", "wa-first")
+    expect(screen.getByText("Amostra insuficiente para declarar vencedor")).toBeInTheDocument()
+    expect(screen.getByText(/control vs wa-first/)).toBeInTheDocument()
+    expect(screen.getByText(/amostra 1\/20/)).toBeInTheDocument()
+  })
+
+  it("mostra teto de DMs e horário no card do sistema, só leitura", () => {
+    render(<CrmBoardView {...boardProps({ readiness })} />)
+    const card = screen.getByTestId("sistema-card")
+    expect(card).toHaveTextContent("Em execução")
+    expect(card).toHaveTextContent("12 DMs por dia")
+    expect(card).toHaveTextContent("Horário: 10:00-18:00 (America/Fortaleza)")
+    expect(card.querySelector("input")).toBeNull()
+    expect(screen.getByTestId("first-visit-board-helper")).toHaveTextContent(
+      /abra um lead e use Enfileirar primeiro contato/,
+    )
+    expect(screen.getByText("Nenhum job na fila.")).toBeInTheDocument()
+  })
+
+  it("mostra estado vazio do board e das colunas em PT-BR", () => {
+    const onDiscoverLeads = jest.fn()
+    const { rerender } = render(
+      <CrmBoardView
+        {...boardProps({
+          columns: {},
+          metrics: { leadCount: 0, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 },
+          onDiscoverLeads,
+        })}
+      />,
+    )
+    expect(screen.getByText("Nenhum lead ainda")).toBeInTheDocument()
+    expect(screen.getByText(/leads de demonstração/)).toBeInTheDocument()
+    const discoverButtons = screen.getAllByRole("button", { name: "Descobrir leads simulados" })
+    expect(discoverButtons.length).toBe(2)
+    fireEvent.click(discoverButtons[1]!)
+    expect(onDiscoverLeads).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <CrmBoardView
+        {...boardProps({
+          columns: { qualified: [{ ...lead, pipelineState: "qualified" }] },
+          metrics: { leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 },
+        })}
+      />,
+    )
+    expect(screen.getAllByText("Nenhum lead nesta etapa").length).toBeGreaterThan(0)
+    expect(screen.queryByText("Nenhum lead ainda")).not.toBeInTheDocument()
   })
 })

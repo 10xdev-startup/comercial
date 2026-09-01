@@ -8,6 +8,7 @@ describe('claims', () => {
     const config = loadBusinessConfig()
     expect(config.companyName).toBe('10xMídia')
     expect(config.ownerName).toBe('Luiz Bertucci')
+    expect(config.whatsappLink).toBe('https://wa.me/5531988965216')
     expect(config.revenueModel).toMatch(/R\$ 75/)
     expect(JSON.stringify(config)).not.toMatch(/affiliate/i)
   })

@@ -1,5 +1,15 @@
 import { apiClient } from "@/services/apiClient"
-import type { BoardResponse, JobSummary, Lead, LeadDetailResponse, PublicCrmConfig, SystemState } from "@/types/crm"
+import type {
+  BoardResponse,
+  ExperimentSummary,
+  InboundScenario,
+  JobSummary,
+  Lead,
+  LeadDetailResponse,
+  PublicCrmConfig,
+  SystemState,
+  CrmReadiness,
+} from "@/types/crm"
 
 export const crmService = {
   getBoard: () => apiClient.get<BoardResponse>("/crm/board"),
@@ -12,7 +22,28 @@ export const crmService = {
     apiClient.post<{ job: JobSummary }>(`/crm/leads/${id}/notes`, { body }),
   getJobs: () => apiClient.get<{ jobs: JobSummary[] }>("/crm/jobs"),
   getStatus: () => apiClient.get<SystemState>("/crm/status"),
+  getReadiness: () => apiClient.get<CrmReadiness>("/crm/readiness"),
   setPaused: (paused: boolean, reason?: string) =>
     apiClient.post<SystemState>("/crm/pause", reason ? { paused, reason } : { paused }),
   getConfig: () => apiClient.get<PublicCrmConfig>("/crm/config"),
+  getExperiments: () => apiClient.get<{ experiments: ExperimentSummary[] }>("/crm/experiments"),
+  enqueueDiscover: () => apiClient.post<{ job: JobSummary; duplicate: boolean }>("/crm/discover", {}),
+  enqueueFirstContact: (id: string) =>
+    apiClient.post<{ job: JobSummary; duplicate: boolean }>(`/crm/leads/${id}/first-contact`, {}),
+  simulateInbound: (id: string, scenario: InboundScenario) =>
+    apiClient.post<{
+      processed: number
+      duplicates: number
+      restrictions: number
+      scenario: InboundScenario
+      mid: string
+    }>(`/crm/leads/${id}/simulate-inbound`, { scenario }),
+  createExperiment: (input: {
+    name: string
+    hypothesis: string
+    variants: string[]
+    sampleSize: number
+  }) => apiClient.post<{ experiment: ExperimentSummary }>("/crm/experiments", input),
+  declareWinner: (id: string, winner: string) =>
+    apiClient.post<{ experiment: ExperimentSummary }>(`/crm/experiments/${id}/winner`, { winner }),
 }
