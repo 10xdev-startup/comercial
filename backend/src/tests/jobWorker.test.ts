@@ -8,6 +8,8 @@ import { resetMemoryStore } from '@/store/memoryStore'
 import { SKIPPED_DO_NOT_CONTACT } from '@/types/job'
 import { resetComposerOverride, setComposerOverride } from '@/browser/composer'
 import { FakeInstagramComposer } from '@/browser/fakeCdp'
+import { resetCircuitBreaker } from '@/observability/circuitBreaker'
+import { resetBrowserMutex } from '@/worker/browserMutex'
 import { recoverAndTick, tickOnce } from '@/worker/loop'
 import { enqueueUniqueSend } from '@/worker/sendLock'
 
@@ -23,10 +25,14 @@ describe('job worker', () => {
   beforeEach(() => {
     resetMemoryStore()
     resetComposerOverride()
+    resetCircuitBreaker()
+    resetBrowserMutex()
     delete process.env['SUPABASE_URL']
     delete process.env['SUPABASE_SERVICE_ROLE_KEY']
     delete process.env['INSTAGRAM_LIVE_SEND']
     delete process.env['CHROME_CDP_URL']
+    delete process.env['OPENAI_API_KEY']
+    process.env['OPENAI_MONTHLY_BUDGET_USD'] = '50'
     process.env['WORKER_RETRY_BACKOFF_MS'] = '0'
     openHoursUtc()
   })
@@ -103,10 +109,8 @@ describe('job worker', () => {
     expect(first.duplicate).toBe(false)
   })
 
-  it('completes discover_leads and interpret_reply stubs without sending', async () => {
+  it('completes discover_leads without sending', async () => {
     await JobModel.enqueue({ type: 'discover_leads', payload: {} })
-    await JobModel.enqueue({ type: 'interpret_reply', payload: { leadId: 'none' } })
-    expect(await tickOnce()).toBe('ran')
     expect(await tickOnce()).toBe('ran')
     const jobs = await JobModel.list()
     expect(jobs.every((job) => job.status === 'succeeded')).toBe(true)
@@ -139,8 +143,10 @@ describe('job worker', () => {
     expect(jobs[0]?.status).toBe('succeeded')
     expect(jobs[0]?.lastError).toBeNull()
     const updated = await LeadModel.findById(lead.id)
-    expect(updated?.channelState).toBe('browser_contact_sent')
+    expect(updated?.channelState).toBe('waiting_inbound_reply')
     expect(updated?.pipelineState).toBe('contacted')
+    const conversation = await LeadModel.getOrCreateConversation(lead.id)
+    expect(conversation.channelOwner).toBe('browser')
     const messages = await LeadModel.listMessages(lead.id)
     expect(messages).toHaveLength(1)
     expect(messages[0]?.source).toBe('browser')

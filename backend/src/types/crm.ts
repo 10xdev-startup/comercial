@@ -98,6 +98,8 @@ export interface SystemState {
 export interface CrmMetrics {
   leadCount: number
   activeCustomerCount: number
+  aiCostUsdThisMonth: number
+  aiCostPerLead: number
 }
 
 export const CLIENT_PIPELINE_ORDER: ClientPipelineState[] = [

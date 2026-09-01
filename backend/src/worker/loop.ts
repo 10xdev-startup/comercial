@@ -1,8 +1,10 @@
 import { loadRateLimits } from '@/config/rateLimits'
 import { JobModel } from '@/models/JobModel'
 import { SystemStateModel } from '@/models/SystemStateModel'
+import { recordCircuitEvent } from '@/observability/circuitBreaker'
+import { logEvent } from '@/observability/logger'
 import { reportError } from '@/services/errorReporting'
-import { isSendJobType, SKIPPED_DO_NOT_CONTACT, type Job } from '@/types/job'
+import { isSendJobType, SKIPPED_BROWSER_BUSY, type Job } from '@/types/job'
 import { handleJob } from '@/worker/handlers'
 import { nextAllowedSendAt, startOfZonedDay } from '@/worker/schedule'
 
@@ -54,16 +56,27 @@ export async function tickOnce(now = new Date()): Promise<TickResult> {
   }
 
   try {
-    const outcome = await handleJob(job)
-    if (outcome === 'skipped') {
-      await JobModel.finish(job.id, 'succeeded', { lastError: SKIPPED_DO_NOT_CONTACT, at: now })
-    } else {
-      await JobModel.finish(job.id, 'succeeded', { at: now })
+    const result = await handleJob(job)
+    if (result.outcome === 'skipped') {
+      if (result.reason === SKIPPED_BROWSER_BUSY) {
+        const retryAt = new Date(now.getTime() + 1000)
+        await JobModel.defer(job.id, retryAt.toISOString(), result.reason)
+        return 'deferred'
+      }
+      await JobModel.finish(job.id, 'succeeded', { lastError: result.reason, at: now })
+      return 'ran'
     }
+    await JobModel.finish(job.id, 'succeeded', { at: now })
     return 'ran'
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     void reportError({ context: `worker:${job.type}`, error: err })
+    logEvent('worker_job_error', { jobId: job.id, type: job.type, error: message })
+    if (message.startsWith('instagram_restriction')) {
+      await recordCircuitEvent('restriction', now.getTime())
+    } else {
+      await recordCircuitEvent('error', now.getTime())
+    }
     if (job.attempts >= job.maxAttempts) {
       await JobModel.finish(job.id, 'dead_letter', { lastError: message, at: now })
     } else {

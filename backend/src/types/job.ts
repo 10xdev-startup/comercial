@@ -21,6 +21,8 @@ export interface JobPayload {
   source?: 'browser' | 'api' | 'system'
   direction?: 'inbound' | 'outbound'
   followUpKey?: string
+  mid?: string
+  senderId?: string
 }
 
 export interface Job {
@@ -41,6 +43,10 @@ export interface Job {
 }
 
 export const SKIPPED_DO_NOT_CONTACT = 'skipped:do_not_contact'
+export const SKIPPED_LEAD_NOT_FOUND = 'skipped:lead_not_found'
+export const SKIPPED_OPENAI_BUDGET = 'skipped:openai_budget'
+export const SKIPPED_BROWSER_BUSY = 'skipped:browser_busy'
+export const SKIPPED_MISSING_IGSID = 'skipped:missing_igsid'
 
 export function countsAsDmSlot(job: Pick<Job, 'type' | 'status' | 'lastError'>): boolean {
   return isSendJobType(job.type) && job.status === 'succeeded' && job.lastError === null

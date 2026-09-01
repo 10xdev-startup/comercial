@@ -4,6 +4,8 @@ import { isChannelState } from '@/domain/channel'
 import { isClientPipelineState } from '@/domain/pipeline'
 import { AppError } from '@/utils/AppError'
 import { sendOk } from '@/utils/apiResponse'
+import { AiUsageModel } from '@/models/AiUsageModel'
+import { EarlyWinnerError, ExperimentModel } from '@/models/ExperimentModel'
 import { JobModel } from '@/models/JobModel'
 import { LeadModel } from '@/models/LeadModel'
 import { DoNotContactModel, SystemStateModel } from '@/models/SystemStateModel'
@@ -29,12 +31,16 @@ function groupByPipeline(leads: Lead[]): Record<string, Lead[]> {
 export const CrmController = {
   async board(_req: Request, res: Response): Promise<void> {
     const leads = await LeadModel.list()
+    const leadCount = leads.length
+    const aiCostUsdThisMonth = await AiUsageModel.monthSpend()
     sendOk(res, {
       columns: groupByPipeline(leads),
       leads,
       metrics: {
-        leadCount: leads.length,
+        leadCount,
         activeCustomerCount: leads.filter((lead) => lead.pipelineState === 'active_customer').length,
+        aiCostUsdThisMonth,
+        aiCostPerLead: leadCount === 0 ? 0 : Number((aiCostUsdThisMonth / leadCount).toFixed(6)),
       },
     })
   },
@@ -142,6 +148,84 @@ export const CrmController = {
     const reason = typeof body.reason === 'string' ? body.reason : 'manual'
     const state = await SystemStateModel.setPaused(body.paused, body.paused ? reason : null)
     sendOk(res, state)
+  },
+
+  async listExperiments(_req: Request, res: Response): Promise<void> {
+    const experiments = await ExperimentModel.list()
+    const withCounts = await Promise.all(
+      experiments.map(async (experiment) => ({
+        ...experiment,
+        assignedCount: await LeadModel.countByExperiment(experiment.id),
+      })),
+    )
+    sendOk(res, { experiments: withCounts })
+  },
+
+  async createExperiment(req: Request, res: Response): Promise<void> {
+    const body = (req.body ?? {}) as {
+      name?: unknown
+      hypothesis?: unknown
+      variants?: unknown
+      sampleSize?: unknown
+      controlVariant?: unknown
+    }
+    if (typeof body.name !== 'string' || !body.name.trim()) {
+      throw new AppError(422, 'name e obrigatorio', 'INVALID_EXPERIMENT')
+    }
+    if (typeof body.hypothesis !== 'string' || !body.hypothesis.trim()) {
+      throw new AppError(422, 'hypothesis e obrigatorio', 'INVALID_EXPERIMENT')
+    }
+    if (!Array.isArray(body.variants) || body.variants.length !== 1 || typeof body.variants[0] !== 'string') {
+      throw new AppError(422, 'Informe exatamente uma variante alem do controle', 'INVALID_EXPERIMENT')
+    }
+    if (typeof body.sampleSize !== 'number' || !Number.isInteger(body.sampleSize) || body.sampleSize < 1) {
+      throw new AppError(422, 'sampleSize deve ser inteiro positivo', 'INVALID_EXPERIMENT')
+    }
+    const createInput: {
+      name: string
+      hypothesis: string
+      variants: string[]
+      sampleSize: number
+      controlVariant?: string
+    } = {
+      name: body.name.trim(),
+      hypothesis: body.hypothesis.trim(),
+      variants: [body.variants[0].trim()],
+      sampleSize: body.sampleSize,
+    }
+    if (typeof body.controlVariant === 'string' && body.controlVariant.trim()) {
+      createInput.controlVariant = body.controlVariant.trim()
+    }
+    try {
+      const experiment = await ExperimentModel.create(createInput)
+      sendOk(res, { experiment }, 201)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha ao criar experimento'
+      throw new AppError(422, message, 'INVALID_EXPERIMENT')
+    }
+  },
+
+  async declareWinner(req: Request, res: Response): Promise<void> {
+    const id = routeParam(req.params['id'])
+    const body = (req.body ?? {}) as { winner?: unknown; assignedCount?: unknown }
+    if (typeof body.winner !== 'string' || !body.winner.trim()) {
+      throw new AppError(422, 'winner e obrigatorio', 'INVALID_WINNER')
+    }
+    const assignedCount =
+      typeof body.assignedCount === 'number' && Number.isFinite(body.assignedCount)
+        ? body.assignedCount
+        : await LeadModel.countByExperiment(id)
+    try {
+      const experiment = await ExperimentModel.declareWinner(id, body.winner.trim(), assignedCount)
+      sendOk(res, { experiment })
+    } catch (err) {
+      if (err instanceof EarlyWinnerError) {
+        throw new AppError(409, 'Amostra insuficiente para declarar vencedor', 'SAMPLE_TOO_SMALL')
+      }
+      const message = err instanceof Error ? err.message : 'Falha ao concluir experimento'
+      if (message === 'Experiment not found') throw new AppError(404, 'Experimento nao encontrado', 'EXPERIMENT_NOT_FOUND')
+      throw new AppError(422, message, 'INVALID_WINNER')
+    }
   },
 
   async publicConfig(_req: Request, res: Response): Promise<void> {

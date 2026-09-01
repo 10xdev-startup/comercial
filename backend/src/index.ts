@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import { sendOk } from '@/utils/apiResponse'
 import { userRoutes } from '@/routes/userRoutes'
 import { crmRoutes } from '@/routes/crmRoutes'
+import { webhookRoutes } from '@/routes/webhookRoutes'
 import { errorHandler } from '@/middleware'
 import { startWorkerLoop } from '@/worker/loop'
 
@@ -19,7 +20,13 @@ const app = express()
 const PORT = process.env['PORT'] || 3001
 
 app.use(cors())
-app.use(express.json())
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as express.Request).rawBody = buf
+    },
+  }),
+)
 
 app.get('/health', (_req, res) => {
   // Envelope wrapped (blueprint §4): todo controller responde via sendOk/sendError.
@@ -29,6 +36,7 @@ app.get('/health', (_req, res) => {
 // Dominio de referencia: usuario (Controller → Model → Database).
 app.use('/users', userRoutes)
 app.use('/crm', crmRoutes)
+app.use('/webhooks', webhookRoutes)
 
 // Handler de erro central — por ULTIMO, depois das rotas (serializa AppError no envelope).
 app.use(errorHandler)
