@@ -24,4 +24,7 @@ export const crmService = {
     apiClient.post<SystemState>("/crm/pause", reason ? { paused, reason } : { paused }),
   getConfig: () => apiClient.get<PublicCrmConfig>("/crm/config"),
   getExperiments: () => apiClient.get<{ experiments: ExperimentSummary[] }>("/crm/experiments"),
+  enqueueDiscover: () => apiClient.post<{ job: JobSummary; duplicate: boolean }>("/crm/discover", {}),
+  enqueueFirstContact: (id: string) =>
+    apiClient.post<{ job: JobSummary; duplicate: boolean }>(`/crm/leads/${id}/first-contact`, {}),
 }

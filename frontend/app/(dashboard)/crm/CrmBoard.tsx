@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Pause, Play, Plus, RefreshCw } from "lucide-react"
+import { Pause, Play, Plus, RefreshCw, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/showcase/blocks/EmptyState"
@@ -34,9 +34,11 @@ export type CrmBoardViewProps = {
   loading: boolean
   pausing: boolean
   creating: boolean
+  discovering: boolean
   onRefresh: () => void
   onTogglePause: () => void
   onCreateLead: (input: { instagramHandle: string; displayName: string }) => void
+  onDiscoverLeads: () => void
 }
 
 export function CrmBoardView({
@@ -49,9 +51,11 @@ export function CrmBoardView({
   loading,
   pausing,
   creating,
+  discovering,
   onRefresh,
   onTogglePause,
   onCreateLead,
+  onDiscoverLeads,
 }: CrmBoardViewProps) {
   const [handle, setHandle] = useState("")
   const [displayName, setDisplayName] = useState("")
@@ -68,6 +72,16 @@ export function CrmBoardView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={paused || discovering || loading}
+            onClick={onDiscoverLeads}
+          >
+            <Search className="size-4" />
+            Descobrir leads simulados
+          </Button>
           <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
             <RefreshCw className="size-4" />
             Atualizar
@@ -84,6 +98,11 @@ export function CrmBoardView({
           </Button>
         </div>
       </header>
+
+      <p className="text-xs text-muted-foreground">
+        A descoberta simulada usa o ICP do arquivo de negócio e não abre o Instagram.
+        O primeiro contato em dry-run não clica em Enviar, a menos que INSTAGRAM_LIVE_SEND esteja ligado.
+      </p>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-border bg-card p-4">
@@ -212,6 +231,7 @@ export function CrmBoard() {
   const [loading, setLoading] = useState(true)
   const [pausing, setPausing] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [discovering, setDiscovering] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -283,6 +303,22 @@ export function CrmBoard() {
     )
   }, [])
 
+  const onDiscoverLeads = useCallback(() => {
+    if (status?.paused) return
+    setDiscovering(true)
+    void crmService.enqueueDiscover().then(
+      () => {
+        setDiscovering(false)
+        setLoading(true)
+        setReloadKey((key) => key + 1)
+      },
+      (err: unknown) => {
+        setError(err instanceof ApiRequestError ? err.message : "Falha ao descobrir leads")
+        setDiscovering(false)
+      },
+    )
+  }, [status])
+
   return (
     <CrmBoardView
       columns={columns}
@@ -294,9 +330,11 @@ export function CrmBoard() {
       loading={loading}
       pausing={pausing}
       creating={creating}
+      discovering={discovering}
       onRefresh={onRefresh}
       onTogglePause={onTogglePause}
       onCreateLead={onCreateLead}
+      onDiscoverLeads={onDiscoverLeads}
     />
   )
 }

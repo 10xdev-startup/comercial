@@ -113,6 +113,7 @@ export interface PublicCrmConfig {
   howItWorks: string[]
   revenueModel: string
   geography: string
+  instagramLiveSend: boolean
 }
 
 export const CLIENT_PIPELINE_ORDER: ClientPipelineState[] = [

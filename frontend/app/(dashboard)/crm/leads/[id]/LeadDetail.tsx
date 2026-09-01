@@ -8,26 +8,70 @@ import { Input } from "@/components/ui/input"
 import { crmService } from "@/services/crmService"
 import { ApiRequestError } from "@/services/apiErrors"
 import { channelLabel, pipelineLabel } from "@/lib/pipelineLabels"
-import { CLIENT_PIPELINE_ORDER, type LeadDetailResponse, type PublicCrmConfig } from "@/types/crm"
+import { CLIENT_PIPELINE_ORDER, type LeadDetailResponse, type PublicCrmConfig, type SystemState } from "@/types/crm"
+
+export type FirstContactActionsProps = {
+  paused: boolean
+  pauseReason: string | null
+  canEnqueue: boolean
+  enqueueing: boolean
+  liveSend: boolean
+  onEnqueue: () => void
+}
+
+export function FirstContactActions({
+  paused,
+  pauseReason,
+  canEnqueue,
+  enqueueing,
+  liveSend,
+  onEnqueue,
+}: FirstContactActionsProps) {
+  const disabled = paused || !canEnqueue || enqueueing
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+      <Button type="button" size="sm" disabled={disabled} onClick={onEnqueue}>
+        Enfileirar primeiro contato
+      </Button>
+      {paused ? (
+        <p className="text-xs text-muted-foreground">
+          Sistema pausado{pauseReason ? ` (${pauseReason})` : ""}. Retome no painel para enfileirar.
+        </p>
+      ) : liveSend ? (
+        <p className="text-xs text-muted-foreground">
+          INSTAGRAM_LIVE_SEND está ligado. Só clique se o Chrome do operador estiver aberto em 127.0.0.1.
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Dry-run: o worker não clica em Enviar no Instagram, a menos que você ligue INSTAGRAM_LIVE_SEND=true
+          no Chrome do operador (veja SETUP.md).
+        </p>
+      )}
+    </div>
+  )
+}
 
 export function LeadDetail() {
   const params = useParams<{ id: string }>()
   const leadId = typeof params.id === "string" ? params.id : ""
   const [data, setData] = useState<LeadDetailResponse | null>(null)
   const [config, setConfig] = useState<PublicCrmConfig | null>(null)
+  const [status, setStatus] = useState<SystemState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
+  const [enqueueing, setEnqueueing] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!leadId) return
     let active = true
-    void Promise.all([crmService.getLead(leadId), crmService.getConfig()]).then(
-      ([detail, nextConfig]) => {
+    void Promise.all([crmService.getLead(leadId), crmService.getConfig(), crmService.getStatus()]).then(
+      ([detail, nextConfig, nextStatus]) => {
         if (!active) return
         setData(detail)
         setConfig(nextConfig)
+        setStatus(nextStatus)
         setError(null)
       },
       (err: unknown) => {
@@ -91,6 +135,28 @@ export function LeadDetail() {
             </Button>
           )}
         </div>
+        <FirstContactActions
+          paused={status?.paused === true}
+          pauseReason={status?.pauseReason ?? null}
+          canEnqueue={
+            lead.channelState === "browser_contact_pending" && conversation.channelOwner !== "api"
+          }
+          enqueueing={enqueueing}
+          liveSend={config?.instagramLiveSend === true}
+          onEnqueue={() => {
+            setEnqueueing(true)
+            void crmService.enqueueFirstContact(lead.id).then(
+              () => {
+                setEnqueueing(false)
+                reload()
+              },
+              (err: unknown) => {
+                setError(err instanceof ApiRequestError ? err.message : "Falha ao enfileirar o primeiro contato")
+                setEnqueueing(false)
+              },
+            )
+          }}
+        />
       </header>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

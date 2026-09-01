@@ -35,9 +35,11 @@ describe("CrmBoardView", () => {
         loading={false}
         pausing={false}
         creating={false}
+        discovering={false}
         onRefresh={() => undefined}
         onTogglePause={() => undefined}
         onCreateLead={() => undefined}
+        onDiscoverLeads={() => undefined}
       />,
     )
     expect(screen.getByRole("heading", { name: "CRM de clientes" })).toBeInTheDocument()
@@ -62,12 +64,58 @@ describe("CrmBoardView", () => {
         loading={false}
         pausing={false}
         creating={false}
+        discovering={false}
         onRefresh={() => undefined}
         onTogglePause={onTogglePause}
         onCreateLead={() => undefined}
+        onDiscoverLeads={() => undefined}
       />,
     )
     fireEvent.click(screen.getByRole("button", { name: "Pausar sistema" }))
     expect(onTogglePause).toHaveBeenCalledTimes(1)
+  })
+
+  it("enfileira descoberta simulada e desativa o botão quando pausado", () => {
+    const onDiscoverLeads = jest.fn()
+    const { rerender } = render(
+      <CrmBoardView
+        columns={{ discovered: [lead] }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
+        status={{ paused: false, pauseReason: null, updatedAt: "2026-09-01T12:00:00.000Z" }}
+        jobs={[]}
+        experiments={[]}
+        error={null}
+        loading={false}
+        pausing={false}
+        creating={false}
+        discovering={false}
+        onRefresh={() => undefined}
+        onTogglePause={() => undefined}
+        onCreateLead={() => undefined}
+        onDiscoverLeads={onDiscoverLeads}
+      />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Descobrir leads simulados" }))
+    expect(onDiscoverLeads).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <CrmBoardView
+        columns={{ discovered: [lead] }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
+        status={{ paused: true, pauseReason: "manual", updatedAt: "2026-09-01T12:00:00.000Z" }}
+        jobs={[]}
+        experiments={[]}
+        error={null}
+        loading={false}
+        pausing={false}
+        creating={false}
+        discovering={false}
+        onRefresh={() => undefined}
+        onTogglePause={() => undefined}
+        onCreateLead={() => undefined}
+        onDiscoverLeads={onDiscoverLeads}
+      />,
+    )
+    expect(screen.getByRole("button", { name: "Descobrir leads simulados" })).toBeDisabled()
   })
 })
