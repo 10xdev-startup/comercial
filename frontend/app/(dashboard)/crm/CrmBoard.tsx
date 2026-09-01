@@ -9,7 +9,15 @@ import { EmptyState } from "@/components/showcase/blocks/EmptyState"
 import { crmService } from "@/services/crmService"
 import { ApiRequestError } from "@/services/apiErrors"
 import { channelLabel, pipelineLabel } from "@/lib/pipelineLabels"
-import { CLIENT_PIPELINE_ORDER, type BoardResponse, type ExperimentSummary, type JobSummary, type Lead, type SystemState } from "@/types/crm"
+import { pauseReasonLabel } from "@/lib/pauseReasons"
+import {
+  CLIENT_PIPELINE_ORDER,
+  type BoardResponse,
+  type ExperimentSummary,
+  type JobSummary,
+  type Lead,
+  type SystemState,
+} from "@/types/crm"
 
 function LeadCard({ lead }: { lead: Lead }) {
   return (
@@ -24,6 +32,13 @@ function LeadCard({ lead }: { lead: Lead }) {
   )
 }
 
+export type CreateExperimentInput = {
+  name: string
+  hypothesis: string
+  variant: string
+  sampleSize: number
+}
+
 export type CrmBoardViewProps = {
   columns: Record<string, Lead[]>
   metrics: BoardResponse["metrics"] | null
@@ -35,10 +50,14 @@ export type CrmBoardViewProps = {
   pausing: boolean
   creating: boolean
   discovering: boolean
+  creatingExperiment?: boolean
+  declaringWinnerId?: string | null
   onRefresh: () => void
   onTogglePause: () => void
   onCreateLead: (input: { instagramHandle: string; displayName: string }) => void
   onDiscoverLeads: () => void
+  onCreateExperiment?: (input: CreateExperimentInput) => void
+  onDeclareWinner?: (id: string, winner: string) => void
 }
 
 export function CrmBoardView({
@@ -52,15 +71,24 @@ export function CrmBoardView({
   pausing,
   creating,
   discovering,
+  creatingExperiment = false,
+  declaringWinnerId = null,
   onRefresh,
   onTogglePause,
   onCreateLead,
   onDiscoverLeads,
+  onCreateExperiment,
+  onDeclareWinner,
 }: CrmBoardViewProps) {
   const [handle, setHandle] = useState("")
   const [displayName, setDisplayName] = useState("")
+  const [experimentName, setExperimentName] = useState("")
+  const [hypothesis, setHypothesis] = useState("")
+  const [variant, setVariant] = useState("")
+  const [sampleSize, setSampleSize] = useState("20")
   const totalLeads = metrics?.leadCount ?? 0
   const paused = status?.paused === true
+  const pauseLabel = paused ? pauseReasonLabel(status?.pauseReason) : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -99,6 +127,16 @@ export function CrmBoardView({
         </div>
       </header>
 
+      {paused && (
+        <div
+          className="rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3"
+          role="status"
+        >
+          <p className="text-sm font-semibold text-destructive">Sistema pausado</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{pauseLabel}</p>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
         A descoberta simulada usa o ICP do arquivo de negócio e não abre o Instagram.
         O primeiro contato em dry-run não clica em Enviar, a menos que INSTAGRAM_LIVE_SEND esteja ligado.
@@ -125,8 +163,8 @@ export function CrmBoardView({
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sistema</p>
           <p className="mt-1 text-xl font-semibold">{paused ? "Pausado" : "Em execução"}</p>
-          {status?.pauseReason && (
-            <p className="mt-1 text-xs text-muted-foreground">{status.pauseReason}</p>
+          {pauseLabel && (
+            <p className="mt-1 text-xs text-muted-foreground">{pauseLabel}</p>
           )}
         </div>
       </div>
@@ -190,19 +228,126 @@ export function CrmBoardView({
         </div>
       )}
 
-      {experiments.length > 0 && (
-        <section className="rounded-xl border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold">Experimentos (uma variável por vez)</h2>
-          <ul className="mt-2 space-y-2 text-xs text-muted-foreground">
-            {experiments.map((experiment) => (
-              <li key={experiment.id}>
-                {experiment.name} · {experiment.status} · amostra {experiment.assignedCount}/{experiment.sampleSize}
-                {experiment.winner ? ` · vencedor ${experiment.winner}` : " · sem vencedor precoce"}
-              </li>
-            ))}
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold">Experimentos (uma variável por vez)</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Compare exatamente uma variante contra o controle. O CRM recusa vencedor se a amostra for menor que sample_size.
+        </p>
+        {onCreateExperiment && (
+          <form
+            className="mt-3 flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const size = Number.parseInt(sampleSize, 10)
+              if (!experimentName.trim() || !hypothesis.trim() || !variant.trim() || !Number.isInteger(size) || size < 1) {
+                return
+              }
+              onCreateExperiment({
+                name: experimentName.trim(),
+                hypothesis: hypothesis.trim(),
+                variant: variant.trim(),
+                sampleSize: size,
+              })
+              setExperimentName("")
+              setHypothesis("")
+              setVariant("")
+              setSampleSize("20")
+            }}
+          >
+            <label className="min-w-36 flex-1 text-xs font-medium text-muted-foreground">
+              Nome
+              <Input
+                className="mt-1"
+                value={experimentName}
+                onChange={(event) => setExperimentName(event.target.value)}
+                placeholder="CTA WhatsApp"
+              />
+            </label>
+            <label className="min-w-40 flex-1 text-xs font-medium text-muted-foreground">
+              Hipótese
+              <Input
+                className="mt-1"
+                value={hypothesis}
+                onChange={(event) => setHypothesis(event.target.value)}
+                placeholder="zap no primeiro reply converte mais"
+              />
+            </label>
+            <label className="min-w-32 flex-1 text-xs font-medium text-muted-foreground">
+              Variante (vs controle)
+              <Input
+                className="mt-1"
+                value={variant}
+                onChange={(event) => setVariant(event.target.value)}
+                placeholder="wa-first"
+              />
+            </label>
+            <label className="w-28 text-xs font-medium text-muted-foreground">
+              Amostra
+              <Input
+                className="mt-1"
+                type="number"
+                min={1}
+                value={sampleSize}
+                onChange={(event) => setSampleSize(event.target.value)}
+              />
+            </label>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={
+                creatingExperiment ||
+                !experimentName.trim() ||
+                !hypothesis.trim() ||
+                !variant.trim()
+              }
+            >
+              Criar experimento
+            </Button>
+          </form>
+        )}
+        {experiments.length === 0 ? (
+          <p className="mt-3 text-xs text-muted-foreground">Nenhum experimento ainda.</p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {experiments.map((experiment) => {
+              const variantName = experiment.variants[0] ?? "variante"
+              const canDeclare = experiment.status !== "concluded" && Boolean(onDeclareWinner)
+              return (
+                <li key={experiment.id} className="rounded-lg border border-border p-3">
+                  <p className="text-sm font-medium">{experiment.name}</p>
+                  <p className="text-xs text-muted-foreground">{experiment.hypothesis}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {experiment.controlVariant} vs {variantName} · {experiment.status} · amostra {experiment.assignedCount}/{experiment.sampleSize}
+                    {experiment.winner ? ` · vencedor ${experiment.winner}` : " · sem vencedor precoce"}
+                  </p>
+                  {canDeclare && onDeclareWinner && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={declaringWinnerId === experiment.id}
+                        onClick={() => onDeclareWinner(experiment.id, experiment.controlVariant)}
+                      >
+                        Declarar {experiment.controlVariant}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={declaringWinnerId === experiment.id}
+                        onClick={() => onDeclareWinner(experiment.id, variantName)}
+                      >
+                        Declarar {variantName}
+                      </Button>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
 
       {jobs.length > 0 && (
         <section className="rounded-xl border border-border bg-card p-4">
@@ -232,6 +377,8 @@ export function CrmBoard() {
   const [pausing, setPausing] = useState(false)
   const [creating, setCreating] = useState(false)
   const [discovering, setDiscovering] = useState(false)
+  const [creatingExperiment, setCreatingExperiment] = useState(false)
+  const [declaringWinnerId, setDeclaringWinnerId] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -319,6 +466,49 @@ export function CrmBoard() {
     )
   }, [status])
 
+  const onCreateExperiment = useCallback((input: CreateExperimentInput) => {
+    setCreatingExperiment(true)
+    void crmService
+      .createExperiment({
+        name: input.name,
+        hypothesis: input.hypothesis,
+        variants: [input.variant],
+        sampleSize: input.sampleSize,
+      })
+      .then(
+        () => {
+          setCreatingExperiment(false)
+          setLoading(true)
+          setReloadKey((key) => key + 1)
+        },
+        (err: unknown) => {
+          setError(err instanceof ApiRequestError ? err.message : "Falha ao criar experimento")
+          setCreatingExperiment(false)
+        },
+      )
+  }, [])
+
+  const onDeclareWinner = useCallback((id: string, winner: string) => {
+    setDeclaringWinnerId(id)
+    void crmService.declareWinner(id, winner).then(
+      () => {
+        setDeclaringWinnerId(null)
+        setLoading(true)
+        setReloadKey((key) => key + 1)
+      },
+      (err: unknown) => {
+        let message = "Falha ao declarar vencedor"
+        if (err instanceof ApiRequestError) {
+          message = err.code === "SAMPLE_TOO_SMALL"
+            ? "Amostra insuficiente para declarar vencedor"
+            : err.message
+        }
+        setError(message)
+        setDeclaringWinnerId(null)
+      },
+    )
+  }, [])
+
   return (
     <CrmBoardView
       columns={columns}
@@ -331,10 +521,14 @@ export function CrmBoard() {
       pausing={pausing}
       creating={creating}
       discovering={discovering}
+      creatingExperiment={creatingExperiment}
+      declaringWinnerId={declaringWinnerId}
       onRefresh={onRefresh}
       onTogglePause={onTogglePause}
       onCreateLead={onCreateLead}
       onDiscoverLeads={onDiscoverLeads}
+      onCreateExperiment={onCreateExperiment}
+      onDeclareWinner={onDeclareWinner}
     />
   )
 }

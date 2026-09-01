@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from '@jest/globals'
+import type { Request, Response } from 'express'
+import { CrmController } from '@/controllers/CrmController'
 import { EarlyWinnerError, ExperimentModel } from '@/models/ExperimentModel'
+import { AppError } from '@/utils/AppError'
 import { LeadModel } from '@/models/LeadModel'
 import { resetMemoryStore } from '@/store/memoryStore'
 import { resetCircuitBreaker } from '@/observability/circuitBreaker'
@@ -52,6 +55,29 @@ describe('experiments', () => {
       sampleSize: 20,
     })
     await expect(ExperimentModel.declareWinner(experiment.id, 'wa-first', 3)).rejects.toBeInstanceOf(EarlyWinnerError)
+  })
+
+  it('returns SAMPLE_TOO_SMALL when the CRM declares a winner too early', async () => {
+    const experiment = await ExperimentModel.create({
+      name: 'cta-ui',
+      hypothesis: 'uma variante so',
+      variants: ['wa-first'],
+      sampleSize: 20,
+    })
+    const res: Partial<Response> = {}
+    res.status = ((code: number) => {
+      ;(res as Response & { statusCode: number }).statusCode = code
+      return res as Response
+    }) as Response['status']
+    res.json = ((payload: unknown) => {
+      ;(res as Response & { body: unknown }).body = payload
+      return res as Response
+    }) as Response['json']
+    const req = { params: { id: experiment.id }, body: { winner: 'wa-first' } } as unknown as Request
+    await expect(CrmController.declareWinner(req, res as Response)).rejects.toMatchObject({
+      name: 'AppError',
+      code: 'SAMPLE_TOO_SMALL',
+    } satisfies Partial<AppError>)
   })
 
   it('attributes a running experiment on first contact', async () => {
