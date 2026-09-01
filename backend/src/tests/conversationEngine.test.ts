@@ -122,4 +122,25 @@ describe('openai conversation engine', () => {
     expect(outbound[0]?.body.toLowerCase()).not.toContain('10x mais produtivo')
     expect(outbound[0]?.body.toLowerCase()).not.toContain('34%')
   })
+
+  it('appends the business-config WhatsApp link even if the model omits it', async () => {
+    setOpenAiCompleteOverride(async () => ({
+      text: JSON.stringify({
+        intent: 'wants_whatsapp',
+        action: 'handoff_whatsapp',
+        reply: 'Te mando o zap agora',
+      }),
+      promptTokens: 8,
+      completionTokens: 4,
+    }))
+    const lead = await LeadModel.create({ instagramHandle: 'zap_link' })
+    const now = new Date('2026-09-01T12:00:00.000Z')
+    await processInboundMessages(inbound('zap_link', 'me passa o zap', 'mid-zap'), now)
+    expect(await tickOnce(now)).toBe('ran')
+    const outbound = (await LeadModel.listMessages(lead.id)).filter(
+      (message) => message.direction === 'outbound',
+    )
+    expect(outbound.some((message) => message.body.includes('https://wa.me/5531988965216'))).toBe(true)
+    expect(outbound.some((message) => message.body.includes('Te mando o zap agora'))).toBe(true)
+  })
 })

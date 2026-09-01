@@ -87,6 +87,22 @@ function estimateCostUsd(promptTokens: number, completionTokens: number): number
   return Number(((promptTokens * 2 + completionTokens * 8) / 1_000_000).toFixed(6))
 }
 
+function withWhatsappHandoffLink(
+  intent: ConversationIntent,
+  action: ConversationAction,
+  reply: string | null,
+  config: BusinessConfig,
+): string | null {
+  const handoff = intent === 'wants_whatsapp' || action === 'handoff_whatsapp'
+  if (!handoff) return reply
+  const link = config.whatsappLink
+  if (!reply || !reply.trim()) {
+    return `Perfeito. Segue o WhatsApp da ${config.companyName}: ${link}`
+  }
+  if (reply.includes(link)) return reply
+  return `${reply.trim()} ${link}`
+}
+
 function sanitizeReply(reply: string | null, config: BusinessConfig): string | null {
   if (reply === null || !reply.trim()) return null
   const blocked = findBlockedClaim(reply, config)
@@ -141,7 +157,7 @@ export async function interpretAndDecide(input: {
   const fallback: DecisionResult = {
     intent: heuristic.intent,
     action: heuristic.action,
-    reply: sanitizeReply(heuristic.reply, config),
+    reply: withWhatsappHandoffLink(heuristic.intent, heuristic.action, sanitizeReply(heuristic.reply, config), config),
     model: 'heuristic',
     promptTokens: 0,
     completionTokens: 0,
@@ -171,7 +187,7 @@ export async function interpretAndDecide(input: {
     return {
       intent: parsed.intent,
       action: parsed.action,
-      reply: sanitizeReply(parsed.reply, config),
+      reply: withWhatsappHandoffLink(parsed.intent, parsed.action, sanitizeReply(parsed.reply, config), config),
       model,
       promptTokens: completion.promptTokens,
       completionTokens: completion.completionTokens,
