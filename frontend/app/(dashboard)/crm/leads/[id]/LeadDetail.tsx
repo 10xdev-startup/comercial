@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input"
 import { crmService } from "@/services/crmService"
 import { ApiRequestError } from "@/services/apiErrors"
 import { channelLabel, pipelineLabel } from "@/lib/pipelineLabels"
-import { CLIENT_PIPELINE_ORDER, type LeadDetailResponse, type PublicCrmConfig, type SystemState } from "@/types/crm"
+import { pausedSystemCopy } from "@/lib/pauseReasons"
+import {
+  CLIENT_PIPELINE_ORDER,
+  type InboundScenario,
+  type LeadDetailResponse,
+  type PublicCrmConfig,
+  type SystemState,
+} from "@/types/crm"
 
 export type FirstContactActionsProps = {
   paused: boolean
@@ -34,9 +41,7 @@ export function FirstContactActions({
         Enfileirar primeiro contato
       </Button>
       {paused ? (
-        <p className="text-xs text-muted-foreground">
-          Sistema pausado{pauseReason ? ` (${pauseReason})` : ""}. Retome no painel para enfileirar.
-        </p>
+        <p className="text-xs text-muted-foreground">{pausedSystemCopy(pauseReason)}</p>
       ) : liveSend ? (
         <p className="text-xs text-muted-foreground">
           INSTAGRAM_LIVE_SEND está ligado. Só clique se o Chrome do operador estiver aberto em 127.0.0.1.
@@ -51,6 +56,44 @@ export function FirstContactActions({
   )
 }
 
+const SIMULATE_BUTTONS: { scenario: InboundScenario; label: string }[] = [
+  { scenario: "question", label: "Simular pergunta" },
+  { scenario: "opt_in", label: "Simular opt-in (WhatsApp)" },
+  { scenario: "opt_out", label: "Simular opt-out" },
+  { scenario: "restriction", label: "Simular restrição" },
+]
+
+export type SimulateInboundActionsProps = {
+  simulating: boolean
+  onSimulate: (scenario: InboundScenario) => void
+}
+
+export function SimulateInboundActions({ simulating, onSimulate }: SimulateInboundActionsProps) {
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+      <p className="text-sm font-medium">Simular resposta do Instagram</p>
+      <p className="text-xs text-muted-foreground">
+        POST falso no webhook oficial. Sem Meta e sem Chrome: demonstra lock de canal, OpenAI/heurística e DNC.
+        O worker precisa estar rodando para interpretar a resposta.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {SIMULATE_BUTTONS.map((item) => (
+          <Button
+            key={item.scenario}
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={simulating}
+            onClick={() => onSimulate(item.scenario)}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function LeadDetail() {
   const params = useParams<{ id: string }>()
   const leadId = typeof params.id === "string" ? params.id : ""
@@ -61,6 +104,7 @@ export function LeadDetail() {
   const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
   const [enqueueing, setEnqueueing] = useState(false)
+  const [simulating, setSimulating] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -153,6 +197,22 @@ export function LeadDetail() {
               (err: unknown) => {
                 setError(err instanceof ApiRequestError ? err.message : "Falha ao enfileirar o primeiro contato")
                 setEnqueueing(false)
+              },
+            )
+          }}
+        />
+        <SimulateInboundActions
+          simulating={simulating}
+          onSimulate={(scenario) => {
+            setSimulating(true)
+            void crmService.simulateInbound(lead.id, scenario).then(
+              () => {
+                setSimulating(false)
+                reload()
+              },
+              (err: unknown) => {
+                setError(err instanceof ApiRequestError ? err.message : "Falha ao simular a resposta")
+                setSimulating(false)
               },
             )
           }}

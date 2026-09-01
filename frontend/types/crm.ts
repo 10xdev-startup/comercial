@@ -72,6 +72,8 @@ export interface CrmMetrics {
   aiCostPerLead: number
 }
 
+export type InboundScenario = "question" | "opt_in" | "opt_out" | "restriction"
+
 export interface ExperimentSummary {
   id: string
   name: string

@@ -2,6 +2,7 @@ import { apiClient } from "@/services/apiClient"
 import type {
   BoardResponse,
   ExperimentSummary,
+  InboundScenario,
   JobSummary,
   Lead,
   LeadDetailResponse,
@@ -27,4 +28,20 @@ export const crmService = {
   enqueueDiscover: () => apiClient.post<{ job: JobSummary; duplicate: boolean }>("/crm/discover", {}),
   enqueueFirstContact: (id: string) =>
     apiClient.post<{ job: JobSummary; duplicate: boolean }>(`/crm/leads/${id}/first-contact`, {}),
+  simulateInbound: (id: string, scenario: InboundScenario) =>
+    apiClient.post<{
+      processed: number
+      duplicates: number
+      restrictions: number
+      scenario: InboundScenario
+      mid: string
+    }>(`/crm/leads/${id}/simulate-inbound`, { scenario }),
+  createExperiment: (input: {
+    name: string
+    hypothesis: string
+    variants: string[]
+    sampleSize: number
+  }) => apiClient.post<{ experiment: ExperimentSummary }>("/crm/experiments", input),
+  declareWinner: (id: string, winner: string) =>
+    apiClient.post<{ experiment: ExperimentSummary }>(`/crm/experiments/${id}/winner`, { winner }),
 }

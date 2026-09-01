@@ -8,6 +8,7 @@ import { isLiveSendEnabled } from '@/browser/flags'
 import { browserMaySend } from '@/domain/channelLock'
 import { AiUsageModel } from '@/models/AiUsageModel'
 import { enqueueDiscoverLeads, enqueueUniqueSend } from '@/worker/enqueueJobs'
+import { simulateInboundForLead, isInboundScenario } from '@/integrations/instagram/simulateInbound'
 import { EarlyWinnerError, ExperimentModel } from '@/models/ExperimentModel'
 import { JobModel } from '@/models/JobModel'
 import { LeadModel } from '@/models/LeadModel'
@@ -160,6 +161,18 @@ export const CrmController = {
     await assertSystemRunning()
     const result = await enqueueDiscoverLeads()
     sendOk(res, result, result.duplicate ? 200 : 201)
+  },
+
+  async simulateInbound(req: Request, res: Response): Promise<void> {
+    const id = routeParam(req.params['id'])
+    const lead = await LeadModel.findById(id)
+    if (!lead) throw new AppError(404, 'Lead nao encontrado', 'LEAD_NOT_FOUND')
+    const body = (req.body ?? {}) as { scenario?: unknown }
+    if (!isInboundScenario(body.scenario)) {
+      throw new AppError(422, 'scenario invalido (question, opt_in, opt_out ou restriction)', 'INVALID_SCENARIO')
+    }
+    const result = await simulateInboundForLead(lead, body.scenario)
+    sendOk(res, result)
   },
 
   async jobs(_req: Request, res: Response): Promise<void> {

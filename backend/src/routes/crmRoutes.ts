@@ -20,5 +20,6 @@ router.get('/leads/:id', CrmController.leadDetail)
 router.patch('/leads/:id', CrmController.updateLead)
 router.post('/leads/:id/notes', CrmController.addNote)
 router.post('/leads/:id/first-contact', CrmController.enqueueFirstContact)
+router.post('/leads/:id/simulate-inbound', CrmController.simulateInbound)
 
 export { router as crmRoutes }
