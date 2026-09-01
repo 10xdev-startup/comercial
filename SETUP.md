@@ -69,7 +69,15 @@ Você **não** precisa ligar o Chrome agora. Depois de `npm run dev`:
 3. Abra um lead e clique em **Enfileirar primeiro contato**.
 4. No lead, use **Simular pergunta / opt-in / opt-out** para gravar um inbound falso (lock de canal, heurística/OpenAI e DNC) sem webhook da Meta.
 
-O worker usa o fake CDP e **não** clica em Enviar. Quando for usar o Instagram de verdade, use o comando Linux da seção 7 e deixe `INSTAGRAM_LIVE_SEND=false` até ter certeza.
+O worker usa o fake CDP e **não** clica em Enviar. A faixa **Prontidão** no CRM mostra só sim/não (Supabase, OpenAI, Meta, live send, Chrome CDP, worker). Nenhum segredo aparece.
+
+Quando for ligar o Chrome no **Linux** (perfil dedicado, ainda sem live send):
+
+```bash
+google-chrome --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir="$HOME/.chrome-comercial"
+```
+
+Aí preencha `CHROME_CDP_URL=http://127.0.0.1:9222` e deixe `INSTAGRAM_LIVE_SEND=false` até ter certeza. Detalhes na seção 7.
 
 ## 3.2 Quando você estiver pronto (credenciais)
 
