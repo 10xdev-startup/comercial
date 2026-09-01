@@ -1,0 +1,4 @@
+interface:
+  display_name: "Supabase"
+  short_description: "Cria e audita schema, RLS e Auth com segurança"
+  default_prompt: "Use $supabase para criar ou auditar a fundação Supabase deste projeto com segurança."

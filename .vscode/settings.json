@@ -1,0 +1,7 @@
+{
+  // Usa o TypeScript do repositório em vez do que vem embutido no editor.
+  // Sem isso o editor valida com uma versão mais nova e acusa problemas que o
+  // `tsc` do projeto não tem — por exemplo `baseUrl` marcado como deprecado.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}

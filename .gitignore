@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+*.log
+.env
+.env.*
+!.env.example
+package-lock.json
+
+# graphify: so o regenaravel. `graphify update .` num clone novo tambem inclui
+# .claude/ nos nos por padrao (majoritariamente codigo das skills, nao do produto) —
+# rode contra um path especifico do dominio se quiser um grafo menos ruidoso.
+graphify-out/cost.json
+graphify-out/cache/
+graphify-out/graph.html
+graphify-out/.graphify_*
+graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "10x Início de Projeto"
+  short_description: "Do clone ao deploy com fundação 10x"
+  default_prompt: "Use $10x-inicio-projeto para transformar este template em um produto funcional e publicá-lo com segurança."

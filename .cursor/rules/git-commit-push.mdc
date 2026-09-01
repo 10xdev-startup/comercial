@@ -1,0 +1,157 @@
+---
+description: Padrão para organizar commits e push com quality gate integrado
+alwaysApply: true
+---
+
+# Git Commit & Push Workflow
+
+**Nunca commite automaticamente.** Só commite quando o usuário pedir explicitamente (ex: "commita", "pode subir", "sobe", "commit", "push").
+
+## Modos de execução
+
+### 1) Commit rápido (default quando usuário pedir só "commit")
+
+Use quando o usuário pedir apenas **commit** (ex: "commita", "pode subir", "só commit", "só commita"):
+
+- Rode `git status` + `git diff --stat` + `git diff` por grupo de arquivos
+- Rode **sempre** `npm run lint`
+- Monte e apresente a **tabela de commits por arquivos**
+- Não rode `npm run build` automaticamente
+- Não rode `coderabbit review` automaticamente
+- Aguarde "ok" do usuário para executar o(s) commit(s)
+
+### 2) Commit completo (somente quando usuário pedir "completo")
+
+Use quando o usuário pedir explicitamente **completo** (ex: "commit completo", "faz o completo", "quality gate completo"):
+
+- Faça tudo do modo rápido
+- Rode também `npm run build`
+- Rode também `coderabbit review --plain --type uncommitted`
+- Apresente tabela enriquecida com status e sugestões
+- Aguarde "ok" do usuário para executar o(s) commit(s)
+
+## 1. Analisar alterações pendentes
+
+- Rode `git status` e `git diff --stat` para listar todos os arquivos modificados
+- Rode `git diff` por grupo de arquivos para entender cada mudança
+
+## 2. Quality Gate por modo
+
+### Lint (sempre)
+
+```bash
+npm run lint
+```
+
+- **Sempre roda**, independente do tamanho da mudança (rápido e completo)
+- Se falhar, corrija os erros e rode novamente. Não prossiga até passar.
+
+### Build (somente no completo)
+
+```bash
+npm run build
+```
+
+Rode no modo **completo**.  
+Se falhar, corrija e rode novamente. Não prossiga até passar.
+
+**Frontend com limitação de memória (WSL):**
+```bash
+cd frontend && NODE_OPTIONS="--max-old-space-size=4096" npm run build
+```
+Use quando o build crashar por falta de memória no WSL (erro de heap ou crash do terminal).
+
+## 3. Agrupar por responsabilidade
+
+Separe as alterações em commits lógicos, cada um com **uma única responsabilidade**:
+- Agrupe arquivos que fazem parte da mesma feature/fix/refactor
+- Nunca misture alterações de backend com frontend se forem de funcionalidades diferentes
+- Nunca misture performance com feature nova
+
+## 4. Apresentar tabela + CodeRabbit Review (por modo)
+
+### Modo rápido
+
+- Apresente a tabela de commits por arquivos
+- Não rode CodeRabbit automaticamente
+
+### Modo completo
+
+- Apresente a tabela de commits por arquivos
+- Rode CodeRabbit e apresente status/sugestões
+
+### CodeRabbit (somente no completo)
+
+```bash
+coderabbit review --plain --type uncommitted
+```
+
+Rode apenas no modo **completo** (ou se o usuário pedir explicitamente revisão).
+
+### Bloco de aprovação
+
+**IMPORTANTE:** Sempre apresente título + arquivos + corpo de cada commit para o usuário aprovar antes de executar. Use o formato abaixo — cada commit como bloco separado:
+
+---
+
+**#N** — `tipo: título`
+**Arquivos:** `arquivo1.ts`, `arquivo2.ts`
+> Corpo descritivo em 2-3 linhas explicando o que foi feito e o motivo.
+
+---
+
+### Tabela enriquecida (modo completo)
+
+Mapeie as sugestões do CodeRabbit aos commits e apresente a tabela com status:
+
+| # | Commit (título) | Arquivos | Status |
+|---|-----------------|----------|--------|
+| 1 | `tipo: título curto` | arquivo1, arquivo2 | limpo |
+| 2 | `tipo: título curto` | arquivo3 | 2 sugestões |
+
+Para commits com sugestões, liste-as abaixo:
+
+| # | Arquivo | Sugestão | Severidade |
+|---|---------|----------|------------|
+| 1 | `path/file.ts` | Descrição da melhoria | alta/média/baixa |
+
+- Ordene por severidade (alta primeiro)
+- Traduza para português se vier em inglês
+- Pergunte quais sugestões aplicar
+- **Aplique antes de commitar** (o commit já sai na versão final)
+- Se aplicou mudanças, rode `npm run lint` novamente
+
+No modo rápido, apresente a tabela sem coluna de status.
+
+**Tipos de commit:** `feat`, `fix`, `perf`, `style`, `refactor`, `docs`, `chore`, `test`
+
+Aguarde o "ok" do usuário antes de executar os commits.
+
+## 5. Executar commits na ordem
+
+Cada commit usa HEREDOC com título + corpo descritivo:
+
+```bash
+git add arquivo1 arquivo2 && git commit -m "$(cat <<'EOF'
+tipo: título curto em português
+
+Descrição detalhada em 2-3 linhas explicando
+o que foi feito e o motivo da alteração.
+EOF
+)"
+```
+
+## 6. Verificar e fazer push
+
+- Rode `git status` + `git log --oneline` para confirmar
+- **Faça o push automaticamente** logo após os commits
+- Sempre perguntar antes de fazer `push --force`
+
+## Regras
+
+- Títulos de commit em **português**, lowercase, sem ponto final
+- Corpo do commit em **português** com contexto útil
+- Título deve ser o **mais descritivo possível** dentro do limite de ~72 caracteres
+  - Bom: `perf: substituir chamadas individuais /access por cálculo local com useMemo`
+  - Ruim: `perf: otimizar acesso`
+- Sempre perguntar antes de fazer `push --force`

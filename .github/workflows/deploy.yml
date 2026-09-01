@@ -1,0 +1,99 @@
+# Deploy Docker → Azure (Container Registry + App Service).
+# Dispara no push pra `main` e manualmente ("Run workflow").
+#
+# CONFIGURAR UMA VEZ POR PROJETO:
+#   1. Edite o bloco `env:` abaixo com os nomes dos seus recursos Azure.
+#   2. Configure os Secrets do repo (Settings → Secrets and variables → Actions):
+#      - AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID  (service principal)
+#      - NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY    (baked no build do front)
+#   (Dica: rode a skill /deploy-azure pro setup guiado da infra na primeira vez.)
+
+name: Deploy Docker to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  APP_NAME: seu-app-name
+  ACR_NAME: seu-acr # Azure Container Registry (so o nome, sem .azurecr.io)
+  RESOURCE_GROUP: seu-resource-group
+  BACKEND_APP: seu-backend-app # nome do Web App do backend
+  FRONTEND_APP: seu-frontend-app # nome do Web App do frontend
+  BACKEND_IMAGE: seu-backend-image
+  FRONTEND_IMAGE: seu-frontend-image
+  BACKEND_PUBLIC_URL: https://seu-backend.azurewebsites.net # backend de prod (build-arg do front)
+
+jobs:
+  docker-deploy:
+    # O template nunca deve deployar: o bloco `env:` acima e placeholder de proposito,
+    # entao o preflight abortaria em todo merge e a main ficaria vermelha para sempre —
+    # sinal ruidoso que ninguem olha mais. Num projeto derivado o nome do repo e outro,
+    # a condicao e verdadeira e o job roda normalmente, inclusive falhando alto se
+    # esquecerem de configurar. Ao clonar, pode remover esta linha.
+    if: github.repository != '10xdev-startup/template-nodejs-express-next-supabase'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout do codigo
+      id-token: write # auth OIDC no Azure
+
+    steps:
+      - name: Preflight — checar se o workflow foi configurado
+        run: |
+          if printf '%s ' "${{ env.APP_NAME }}" "${{ env.ACR_NAME }}" "${{ env.RESOURCE_GROUP }}" "${{ env.BACKEND_APP }}" "${{ env.FRONTEND_APP }}" "${{ env.BACKEND_IMAGE }}" "${{ env.FRONTEND_IMAGE }}" "${{ env.BACKEND_PUBLIC_URL }}" | grep -q 'seu-'; then
+            echo "::error::Workflow nao configurado. Edite o bloco 'env:' de .github/workflows/deploy.yml com os nomes reais dos recursos (ACR, resource group, Web Apps...) e configure os Secrets. Rode a skill /deploy-azure para o passo a passo. Abortando."
+            exit 1
+          fi
+          echo "Configuracao OK — seguindo com o deploy."
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build and push backend image
+        run: |
+          docker build \
+            --file backend/Dockerfile \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.BACKEND_IMAGE }}:latest \
+            .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.BACKEND_IMAGE }}:latest
+
+      - name: Build and push frontend image
+        # NEXT_PUBLIC_* sao baked no build (ARGs do frontend/Dockerfile).
+        run: |
+          docker build \
+            --file frontend/Dockerfile \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }} \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }} \
+            --build-arg NEXT_PUBLIC_API_URL=${{ env.BACKEND_PUBLIC_URL }} \
+            --build-arg NEXT_PUBLIC_APP_NAME=${{ env.APP_NAME }} \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.FRONTEND_IMAGE }}:latest \
+            .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.FRONTEND_IMAGE }}:latest
+
+      - name: Deploy containers to Azure Web Apps
+        run: |
+          az webapp config container set \
+            --name ${{ env.BACKEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --docker-custom-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.BACKEND_IMAGE }}:latest
+          az webapp config container set \
+            --name ${{ env.FRONTEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --docker-custom-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.FRONTEND_IMAGE }}:latest
+
+      - name: Restart Azure Web Apps
+        run: |
+          az webapp restart --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }}
+          az webapp restart --name ${{ env.FRONTEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }}
+          echo "✅ Deploy concluido!"

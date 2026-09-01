@@ -1,0 +1,125 @@
+---
+description: Extrai comentários de reviews do PR via gh CLI e gera relatório em Markdown
+alwaysApply: false
+---
+
+# PR Comments Extractor
+
+Quando o usuário pedir para **"puxar do coderabbit"** (ou variantes como "extrai as sugestões", "pega os comentários do PR", "relatório do PR", etc.), execute o fluxo abaixo.
+
+## 1. Detectar PR e review ID
+
+O usuário pode fornecer:
+
+- **Branch atual** → detectar PR automaticamente:
+  ```bash
+  branch=$(git branch --show-current)
+  prNum=$(gh pr list --head "$branch" --json number --jq '.[0].number')
+  ```
+- **Número explícito** (ex: "PR #97") → usar diretamente
+- **URL do PR** (ex: `https://github.com/owner/repo/pull/97`) → extrair número da URL
+- **URL de review específico** (ex: `.../pull/97#pullrequestreview-3889856314`) → extrair `prNum` e `reviewId` da URL
+
+Se não encontrar PR, avisar usuário e não prosseguir.
+
+## 2. Baixar conteúdo via gh CLI
+
+```bash
+repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+prInfo=$(gh pr view $prNum --json title,state,url,headRefName,author --jq '{title, state, url, branch: .headRefName, author: .author.login}')
+```
+
+**Se o usuário forneceu URL de review específico** (tem `#pullrequestreview-{id}`), filtrar apenas os comentários daquele review:
+
+```bash
+# Body do review específico
+reviewBody=$(gh api repos/$repo/pulls/$prNum/reviews/$reviewId --jq '.body')
+
+# Apenas os inline comments daquele review
+inlineComments=$(gh api repos/$repo/pulls/$prNum/comments \
+  --jq "[.[] | select(.pull_request_review_id == $reviewId) | {path: .path, line: (.original_line // .line // .start_line), body: .body, user: .user.login}]")
+```
+
+**Se não, buscar todos os comentários do CodeRabbit:**
+
+```bash
+# Comentários inline de todos os reviews
+inlineComments=$(gh api repos/$repo/pulls/$prNum/comments \
+  --jq '[.[] | {path: .path, line: (.original_line // .line // .start_line), body: .body, user: .user.login}]')
+
+# Body do review principal (contém outside diff + actionable summary)
+reviewBody=$(gh api repos/$repo/pulls/$prNum/reviews \
+  --jq '[.[] | select(.user.login | contains("coderabbit")) | .body] | join("\n\n")')
+```
+
+## 3. Analisar e salvar em `.cursor/pr-comments/pr-$prNum.md`
+
+Com os dados de `inlineComments` e `reviewBody` em mãos, o agente (não um script bash) deve:
+
+**a) Parsear cada comentário inline** buscando no campo `body`:
+- Severidade: `_🔴 Critical_`, `_🟠 Major_`, `_🟡 Minor_`
+- Título em negrito (primeira linha `**...**`)
+- Arquivo + linha já estão nos campos `path` e `line`
+
+**b) Parsear o `reviewBody`** para extrair:
+- Outside diff comments (bloco `⚠️ Outside diff range comments`)
+- Comentários que não aparecem inline
+
+**c) Escrever o arquivo** em `.cursor/pr-comments/pr-$prNum.md` com:
+- Seção `## Relatório gerado` **no início**, logo após o cabeçalho:
+  - Primeira linha: estatísticas resumidas (totais por severidade, arquivos afetados, autores)
+  - Em seguida: as tabelas agrupadas por área/funcionalidade com urgência, idênticas ao que será exibido no chat
+- Cabeçalho: título, URL, autor do PR, branch, data gerada
+- Estatísticas: total de comentários, arquivos afetados, autores dos comentários, outside diff
+- Comentários na ordem original em que vieram do GitHub (sem reordenar por severidade)
+- Seção de outside diff ao final
+
+## 4. Apresentar tabela no chat
+
+Após gerar o arquivo, exibir no chat:
+
+1. Caminho do arquivo gerado
+2. Resumo estatístico: totais por severidade, número de arquivos afetados, autores envolvidos
+3. Action items **agrupados por funcionalidade/área**, com cada grupo ordenado por urgência:
+
+**Como agrupar:**
+- Inferir o grupo a partir do caminho do arquivo (`auth/`, `upload/`, `components/`) + contexto semântico do comentário
+- Usar label genérico como nome da área: `Auth`, `Upload`, `Dashboard`, etc.
+- Comentários que não se encaixam em nenhuma área específica vão para o grupo `Geral`
+- Se um comentário abrange múltiplas áreas, colocar na área dominante do arquivo afetado
+
+**Escala de urgência (1 = mais urgente, 5 = menos):**
+| Nível | Critério |
+|-------|----------|
+| 1 | Bloqueante, security, data loss |
+| 2 | Bug funcional, quebra comportamento esperado |
+| 3 | Problema de qualidade ou performance notável |
+| 4 | Melhoria de código, minor refactor |
+| 5 | Sugestão estética, nitpick |
+
+**Coluna Avaliação (somente Critical e Major):**
+- Para cada item 🔴 Critical ou 🟠 Major: ler o arquivo afetado e avaliar se o problema é pertinente
+- Resultado: `✅ Confirmado`, `❌ Falso positivo` ou `⚠️ Parcialmente válido` + justificativa curta (1 linha)
+- Itens 🟡 Minor e 🧹 Nitpick não recebem avaliação (coluna vazia)
+
+**Formato de saída no chat:**
+
+```md
+### 🟦 Auth
+| Urgência | Sev | Arquivo | Problema | Avaliação |
+|----------|-----|---------|----------|-----------|
+| 1        | 🔴  | auth.ts:42 | Token não expira corretamente | ✅ Confirmado. Fluxo X nunca invalida o token |
+| 3        | 🟠  | auth.ts:88 | Lógica de refresh duplicada | ❌ Falso positivo. Funções distintas com propósitos diferentes |
+
+### 🟦 Upload
+| Urgência | Sev | Arquivo | Problema | Avaliação |
+|----------|-----|---------|----------|-----------|
+| 2        | 🔴  | upload.ts:15 | Chamada concorrente sem lock | ✅ Confirmado. Sem mutex no acesso compartilhado |
+
+### 🟦 Geral
+| Urgência | Sev | Arquivo | Problema | Avaliação |
+|----------|-----|---------|----------|-----------|
+| 5        | 🟡  | index.ts:3 | Import não utilizado | |
+```
+
+4. Perguntar se deseja aplicar alguma correção

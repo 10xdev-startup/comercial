@@ -1,0 +1,43 @@
+---
+description: Padrão para criação de Pull Requests via gh CLI (fluxo automático)
+alwaysApply: true
+---
+
+# Pull Request Workflow
+
+Quando o usuário pedir para criar/rodar o PR (ex.: "Rode o PR", "dar pr", "cria o PR"), siga este fluxo **sem pedir ref manual**. A lista "Commits incluídos" deve **bater com o que o GitHub mostra** na aba de commits do PR (commits da branch que não estão na base).
+
+## 1. Atualizar base e listar commits
+
+- Rode `git fetch origin main` (ou a base branch) para ter a base atualizada.
+- Rode `git log origin/main..HEAD --oneline` para listar os commits que entram neste PR (o mesmo que o GitHub exibe).
+- Use **sempre** essa lista para a seção **"Commits incluídos"** — não use ref do body do PR anterior, senão a contagem não bate com a interface do GitHub.
+- Opcional: `git diff origin/main..HEAD --stat` para resumo de arquivos alterados.
+
+## 2. Montar e criar o PR
+
+- **Summary:** em português; bullets com o quê, por quê e como; uma alteração lógica por bullet.
+- **Commits incluídos:** apenas os commits do passo 1, no formato ``- `hash` descrição``.
+- **Título:** em português, descritivo, sem ponto final; prefixe com tema se fizer sentido.
+- Sempre faça **push** da branch antes (`git push origin "$BRANCH"`).
+- **Não crie arquivo .md temporário para o body:** não use `--body-file`, não gere um .md para depois apagar. Use **sempre o heredoc** inline no comando (veja abaixo).
+- Crie o PR com heredoc:
+  ```bash
+  gh pr create --base main --title "Título do PR" --body "$(cat <<'BODY'
+  ## Summary
+
+  - Ponto 1
+  - Ponto 2
+
+  ## Commits incluídos
+
+  - `hash1` descrição 1
+  - `hash2` descrição 2
+  BODY
+  )"
+  ```
+
+## Regras gerais
+
+- Base branch padrão: **main** (a menos que o usuário diga outra).
+- O usuário só precisa dizer "Rode o PR" (ou equivalente); você descobre o último PR, a ref e os commits novos sozinho.
