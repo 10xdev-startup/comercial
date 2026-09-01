@@ -11,6 +11,7 @@ export async function enqueueUniqueSend(input: {
   leadId: string
   followUpKey?: string
   runAt?: string
+  body?: string
 }): Promise<{ job: Job; duplicate: boolean }> {
   const key = input.followUpKey !== undefined
     ? sendLockKey(input.type, input.leadId, input.followUpKey)
@@ -20,6 +21,7 @@ export async function enqueueUniqueSend(input: {
 
   const payload: JobPayload = { leadId: input.leadId }
   if (input.followUpKey !== undefined) payload.followUpKey = input.followUpKey
+  if (input.body !== undefined) payload.body = input.body
 
   const enqueueInput: {
     type: SendJobType

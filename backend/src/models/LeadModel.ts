@@ -34,6 +34,7 @@ export interface UpdateLeadInput {
   channelState?: ChannelState
   nextAction?: string | null
   score?: number
+  lastContactedAt?: string
 }
 
 function escapeIlike(value: string): string {
@@ -151,6 +152,7 @@ export const LeadModel = {
         channelState: patch.channelState ?? current.channelState,
         nextAction: patch.nextAction !== undefined ? patch.nextAction : current.nextAction,
         score: patch.score ?? current.score,
+        lastContactedAt: patch.lastContactedAt !== undefined ? patch.lastContactedAt : current.lastContactedAt,
         updatedAt: new Date().toISOString(),
       }
       return getMemoryStore().saveLead(next)
@@ -161,6 +163,7 @@ export const LeadModel = {
     if (patch.channelState !== undefined) fields['channel_state'] = patch.channelState
     if (patch.nextAction !== undefined) fields['next_action'] = patch.nextAction
     if (patch.score !== undefined) fields['score'] = patch.score
+    if (patch.lastContactedAt !== undefined) fields['last_contacted_at'] = patch.lastContactedAt
     const { data, error } = await supabase.from('leads').update(fields).eq('id', id).select(LEAD_COLUMNS).single()
     if (error) throw new Error(error.message)
     return rowToLead(data as LeadRow)
