@@ -1,9 +1,13 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import type { Request } from 'express'
 import { sendOk } from '@/utils/apiResponse'
 import { userRoutes } from '@/routes/userRoutes'
+import { crmRoutes } from '@/routes/crmRoutes'
+import { webhookRoutes } from '@/routes/webhookRoutes'
 import { errorHandler } from '@/middleware'
+import { startWorkerLoop } from '@/worker/handlers'
 
 // Unico ponto de carga da env no backend. `override: true` NAO e detalhe: sem ele
 // o dotenv preserva o que ja existe no ambiente, e um `export SUPABASE_URL=...` no
@@ -17,7 +21,13 @@ const app = express()
 const PORT = process.env['PORT'] || 3001
 
 app.use(cors())
-app.use(express.json())
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      ;(req as Request & { rawBody?: Buffer }).rawBody = buf
+    },
+  }),
+)
 
 app.get('/health', (_req, res) => {
   // Envelope wrapped (blueprint §4): todo controller responde via sendOk/sendError.
@@ -26,10 +36,16 @@ app.get('/health', (_req, res) => {
 
 // Dominio de referencia: usuario (Controller → Model → Database).
 app.use('/users', userRoutes)
+app.use('/crm', crmRoutes)
+app.use('/webhooks', webhookRoutes)
 
 // Handler de erro central — por ULTIMO, depois das rotas (serializa AppError no envelope).
 app.use(errorHandler)
 
 app.listen(PORT, () => {
   console.log(`Server rodando na porta ${PORT}`)
+  if (process.env['WORKER_ENABLED'] !== 'false') {
+    startWorkerLoop()
+    console.log('Worker de jobs iniciado (tabela jobs, sem Redis)')
+  }
 })
