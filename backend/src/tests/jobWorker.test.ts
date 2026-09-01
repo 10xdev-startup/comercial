@@ -6,6 +6,8 @@ import { LeadModel } from '@/models/LeadModel'
 import { DoNotContactModel, SystemStateModel } from '@/models/SystemStateModel'
 import { resetMemoryStore } from '@/store/memoryStore'
 import { SKIPPED_DO_NOT_CONTACT } from '@/types/job'
+import { resetComposerOverride, setComposerOverride } from '@/browser/composer'
+import { FakeInstagramComposer } from '@/browser/fakeCdp'
 import { recoverAndTick, tickOnce } from '@/worker/loop'
 import { enqueueUniqueSend } from '@/worker/sendLock'
 
@@ -20,8 +22,11 @@ function openHoursUtc(): void {
 describe('job worker', () => {
   beforeEach(() => {
     resetMemoryStore()
+    resetComposerOverride()
     delete process.env['SUPABASE_URL']
     delete process.env['SUPABASE_SERVICE_ROLE_KEY']
+    delete process.env['INSTAGRAM_LIVE_SEND']
+    delete process.env['CHROME_CDP_URL']
     process.env['WORKER_RETRY_BACKOFF_MS'] = '0'
     openHoursUtc()
   })
@@ -69,12 +74,14 @@ describe('job worker', () => {
     expect(jobs[0]?.status).toBe('succeeded')
   })
 
-  it('does not claim jobs while the system is paused', async () => {
+  it('does not claim send_first_dm while the system is paused', async () => {
     await SystemStateModel.setPaused(true, 'manual')
-    await JobModel.enqueue({ type: 'noop', payload: {} })
+    const lead = await LeadModel.create({ instagramHandle: 'pausado' })
+    await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id })
     expect(await tickOnce()).toBe('paused')
     const jobs = await JobModel.list()
     expect(jobs[0]?.status).toBe('pending')
+    expect(jobs[0]?.attempts).toBe(0)
   })
 
   it('recovers a stuck running job after restart', async () => {
@@ -105,19 +112,39 @@ describe('job worker', () => {
     expect(jobs.every((job) => job.status === 'succeeded')).toBe(true)
   })
 
-  it('stubs send_first_dm without calling fetch or Instagram', async () => {
+  it('sends first contact through the fake CDP composer in dry-run', async () => {
+    const fake = new FakeInstagramComposer()
+    setComposerOverride(fake)
     const lead = await LeadModel.create({ instagramHandle: 'stub_send' })
     const fetchSpy = jest.spyOn(globalThis, 'fetch')
     const now = new Date('2026-09-01T12:00:00.000Z')
-    await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id, runAt: now.toISOString() })
+    await enqueueUniqueSend({
+      type: 'send_first_dm',
+      leadId: lead.id,
+      runAt: now.toISOString(),
+      body: 'Oi, dry-run de primeiro contato',
+    })
     expect(await tickOnce(now)).toBe('ran')
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
+    expect(fake.actions).toEqual([
+      'openProfile:stub_send',
+      'openComposer',
+      'typeMessage',
+      'send',
+      'dispose',
+    ])
+    expect(fake.page.sendClicks).toBe(0)
     const jobs = await JobModel.list()
     expect(jobs[0]?.status).toBe('succeeded')
     expect(jobs[0]?.lastError).toBeNull()
+    const updated = await LeadModel.findById(lead.id)
+    expect(updated?.channelState).toBe('browser_contact_sent')
+    expect(updated?.pipelineState).toBe('contacted')
     const messages = await LeadModel.listMessages(lead.id)
-    expect(messages).toHaveLength(0)
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.source).toBe('browser')
+    expect(messages[0]?.body).toBe('[dry-run] Oi, dry-run de primeiro contato')
   })
 
   it('skips a send when the handle is do-not-contact and does not consume a dm slot', async () => {
@@ -181,11 +208,11 @@ describe('job worker', () => {
     expect(pending?.runAt).toBe('2026-09-02T00:00:00.000Z')
   })
 
-  it('does not import Instagram, CDP or private-api clients in the worker', () => {
+  it('does not import private Instagram APIs or fingerprint spoofing in the worker', () => {
     const files = ['loop.ts', 'handlers.ts', 'sendLock.ts', 'schedule.ts']
     for (const file of files) {
       const src = readFileSync(path.resolve(__dirname, '../worker', file), 'utf8')
-      expect(src.toLowerCase()).not.toMatch(/puppeteer|chrome-remote|instagram\.com|graph\.facebook|private.?api/)
+      expect(src.toLowerCase()).not.toMatch(/graph\.facebook|fingerprint|stealth plugin|private.?api|user-agent.?spoof/)
     }
   })
 })
