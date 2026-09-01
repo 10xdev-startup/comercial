@@ -8,6 +8,7 @@ import type {
   LeadDetailResponse,
   PublicCrmConfig,
   SystemState,
+  CrmReadiness,
 } from "@/types/crm"
 
 export const crmService = {
@@ -21,6 +22,7 @@ export const crmService = {
     apiClient.post<{ job: JobSummary }>(`/crm/leads/${id}/notes`, { body }),
   getJobs: () => apiClient.get<{ jobs: JobSummary[] }>("/crm/jobs"),
   getStatus: () => apiClient.get<SystemState>("/crm/status"),
+  getReadiness: () => apiClient.get<CrmReadiness>("/crm/readiness"),
   setPaused: (paused: boolean, reason?: string) =>
     apiClient.post<SystemState>("/crm/pause", reason ? { paused, reason } : { paused }),
   getConfig: () => apiClient.get<PublicCrmConfig>("/crm/config"),

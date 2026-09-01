@@ -6,6 +6,8 @@ import { AppError } from '@/utils/AppError'
 import { sendOk } from '@/utils/apiResponse'
 import { isLiveSendEnabled } from '@/browser/flags'
 import { browserMaySend } from '@/domain/channelLock'
+import { seedDemoClientLeadsIfEmpty } from '@/domain/demoSeed'
+import { collectReadiness } from '@/domain/readiness'
 import { AiUsageModel } from '@/models/AiUsageModel'
 import { enqueueDiscoverLeads, enqueueUniqueSend } from '@/worker/enqueueJobs'
 import { simulateInboundForLead, isInboundScenario } from '@/integrations/instagram/simulateInbound'
@@ -41,6 +43,7 @@ function groupByPipeline(leads: Lead[]): Record<string, Lead[]> {
 
 export const CrmController = {
   async board(_req: Request, res: Response): Promise<void> {
+    await seedDemoClientLeadsIfEmpty()
     const leads = await LeadModel.list()
     const leadCount = leads.length
     const aiCostUsdThisMonth = await AiUsageModel.monthSpend()
@@ -183,6 +186,10 @@ export const CrmController = {
   async status(_req: Request, res: Response): Promise<void> {
     const state = await SystemStateModel.get()
     sendOk(res, state)
+  },
+
+  async readiness(_req: Request, res: Response): Promise<void> {
+    sendOk(res, await collectReadiness())
   },
 
   async pause(req: Request, res: Response): Promise<void> {

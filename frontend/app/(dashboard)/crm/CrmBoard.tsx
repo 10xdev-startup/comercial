@@ -10,9 +10,11 @@ import { crmService } from "@/services/crmService"
 import { ApiRequestError } from "@/services/apiErrors"
 import { channelLabel, pipelineLabel } from "@/lib/pipelineLabels"
 import { pauseReasonLabel } from "@/lib/pauseReasons"
+import { ReadinessStrip } from "./ReadinessStrip"
 import {
   CLIENT_PIPELINE_ORDER,
   type BoardResponse,
+  type CrmReadiness,
   type ExperimentSummary,
   type JobSummary,
   type Lead,
@@ -58,6 +60,7 @@ export type CrmBoardViewProps = {
   onDiscoverLeads: () => void
   onCreateExperiment?: (input: CreateExperimentInput) => void
   onDeclareWinner?: (id: string, winner: string) => void
+  readiness?: CrmReadiness | null
 }
 
 export function CrmBoardView({
@@ -79,6 +82,7 @@ export function CrmBoardView({
   onDiscoverLeads,
   onCreateExperiment,
   onDeclareWinner,
+  readiness = null,
 }: CrmBoardViewProps) {
   const [handle, setHandle] = useState("")
   const [displayName, setDisplayName] = useState("")
@@ -126,6 +130,8 @@ export function CrmBoardView({
           </Button>
         </div>
       </header>
+
+      {readiness && <ReadinessStrip readiness={readiness} />}
 
       {paused && (
         <div
@@ -379,6 +385,7 @@ export function CrmBoard() {
   const [discovering, setDiscovering] = useState(false)
   const [creatingExperiment, setCreatingExperiment] = useState(false)
   const [declaringWinnerId, setDeclaringWinnerId] = useState<string | null>(null)
+  const [readiness, setReadiness] = useState<CrmReadiness | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -388,14 +395,16 @@ export function CrmBoard() {
       crmService.getStatus(),
       crmService.getJobs(),
       crmService.getExperiments(),
+      crmService.getReadiness(),
     ]).then(
-      ([board, nextStatus, nextJobs, nextExperiments]) => {
+      ([board, nextStatus, nextJobs, nextExperiments, nextReadiness]) => {
         if (!active) return
         setColumns(board.columns)
         setMetrics(board.metrics)
         setStatus(nextStatus)
         setJobs(nextJobs.jobs)
         setExperiments(nextExperiments.experiments)
+        setReadiness(nextReadiness)
         setError(null)
         setLoading(false)
       },
@@ -529,6 +538,7 @@ export function CrmBoard() {
       onDiscoverLeads={onDiscoverLeads}
       onCreateExperiment={onCreateExperiment}
       onDeclareWinner={onDeclareWinner}
+      readiness={readiness}
     />
   )
 }

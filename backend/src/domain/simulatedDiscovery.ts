@@ -26,6 +26,16 @@ function ownHandle(config: BusinessConfig): string {
   return config.instagramHandle.trim().replace(/^@/, '').toLowerCase()
 }
 
+export function isAgencyOrOwnerSegment(segment: string): boolean {
+  const lower = segment.toLocaleLowerCase('pt-BR')
+  if (lower.includes('agência') || lower.includes('agencia')) return true
+  return lower.includes('dono')
+}
+
+export function buildDemoClientLeads(config: BusinessConfig): CreateLeadInput[] {
+  return buildSimulatedIcpLeads(config).filter((lead) => isAgencyOrOwnerSegment(lead.niche ?? ''))
+}
+
 export function buildSimulatedIcpLeads(config: BusinessConfig): CreateLeadInput[] {
   const geo = slugify(config.geography) || 'br'
   const keywords = config.icpKeywords.length > 0 ? config.icpKeywords : ['cliente']

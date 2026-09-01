@@ -118,6 +118,20 @@ export interface PublicCrmConfig {
   instagramLiveSend: boolean
 }
 
+export interface CrmReadiness {
+  supabaseConfigured: boolean
+  openaiKeyPresent: boolean
+  instagramAppSecretPresent: boolean
+  instagramPageTokenPresent: boolean
+  instagramLiveSend: boolean
+  chromeCdpConfigured: boolean
+  chromeCdpReachable: boolean
+  workerPaused: boolean
+  pauseReason: string | null
+  webhookUrlHint: string
+  webhookPath: string
+}
+
 export const CLIENT_PIPELINE_ORDER: ClientPipelineState[] = [
   "discovered",
   "qualified",
