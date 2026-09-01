@@ -1,0 +1,20 @@
+{
+  "name": "Meu Projeto — Next.js + Express + Supabase",
+  "install": "npm install",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "npm run dev -w backend",
+      "description": "API Express (porta 3001) com ts-node-dev — hot reload"
+    },
+    {
+      "name": "frontend",
+      "command": "npm run dev -w frontend",
+      "description": "Next.js dev server (porta 3000) — hot reload"
+    }
+  ],
+  "ports": [
+    { "name": "frontend", "port": 3000 },
+    { "name": "backend", "port": 3001 }
+  ]
+}
