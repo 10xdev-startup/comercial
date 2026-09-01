@@ -130,6 +130,9 @@ export interface CrmReadiness {
   pauseReason: string | null
   webhookUrlHint: string
   webhookPath: string
+  maxDmsPerDay: number
+  operatingHours: string
+  operatingTimezone: string
 }
 
 export const CLIENT_PIPELINE_ORDER: ClientPipelineState[] = [

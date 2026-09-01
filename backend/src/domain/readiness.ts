@@ -1,4 +1,5 @@
 import { getChromeCdpUrl, isLiveSendEnabled } from '@/browser/flags'
+import { formatOperatingHoursLabel, loadRateLimits } from '@/config/rateLimits'
 import { isDatabaseConfigured } from '@/database/isConfigured'
 import { SystemStateModel } from '@/models/SystemStateModel'
 
@@ -17,6 +18,9 @@ export interface CrmReadiness {
   pauseReason: string | null
   webhookUrlHint: string
   webhookPath: string
+  maxDmsPerDay: number
+  operatingHours: string
+  operatingTimezone: string
 }
 
 type ChromeProbe = (cdpUrl: string) => Promise<boolean>
@@ -61,6 +65,7 @@ export async function collectReadiness(): Promise<CrmReadiness> {
   const chromeCdpConfigured = chromeCdpUrl !== null
   const chromeCdpReachable = chromeCdpConfigured ? await probeChromeCdp(chromeCdpUrl) : false
   const state = await SystemStateModel.get()
+  const limits = loadRateLimits()
   return {
     supabaseConfigured: isDatabaseConfigured(),
     openaiKeyPresent: envFlagPresent('OPENAI_API_KEY'),
@@ -73,5 +78,8 @@ export async function collectReadiness(): Promise<CrmReadiness> {
     pauseReason: state.pauseReason,
     webhookUrlHint: WEBHOOK_URL_HINT,
     webhookPath: WEBHOOK_PATH,
+    maxDmsPerDay: limits.maxDmsPerDay,
+    operatingHours: formatOperatingHoursLabel(limits.operatingHours),
+    operatingTimezone: limits.timeZone,
   }
 }

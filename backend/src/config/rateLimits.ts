@@ -43,6 +43,17 @@ export function parseOperatingHours(raw: string | undefined): OperatingHours {
   return { startMinutes, endMinutes }
 }
 
+export function formatClockMinutes(totalMinutes: number): string {
+  const capped = Math.min(24 * 60, Math.max(0, totalMinutes))
+  const hours = Math.floor(capped / 60)
+  const minutes = capped % 60
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+export function formatOperatingHoursLabel(hours: OperatingHours): string {
+  return `${formatClockMinutes(hours.startMinutes)}-${formatClockMinutes(hours.endMinutes)}`
+}
+
 export function loadRateLimits(): RateLimitConfig {
   const minSeconds = envInt('MIN_SECONDS_BETWEEN_DMS', 90)
   const maxSeconds = envInt('MAX_SECONDS_BETWEEN_DMS', 240)
