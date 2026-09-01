@@ -1,0 +1,25 @@
+{
+  "ownerName": "{{SEU_NOME}}",
+  "ownerRole": "{{SEU_CARGO}}",
+  "companyName": "{{NOME_DA_EMPRESA}}",
+  "companyWebsite": "{{SITE_DA_EMPRESA}}",
+  "instagramHandle": "{{@SEU_INSTAGRAM}}",
+  "whatsappLink": "{{https://wa.me/55...}}",
+  "affiliateGroupLink": "{{link do grupo de afiliados}}",
+  "oneLinePitch": "{{o que a empresa resolve, em uma frase}}",
+  "howItWorks": ["{{passo 1}}", "{{passo 2}}", "{{passo 3}}"],
+  "revenueModel": "{{como a empresa ganha dinheiro}}",
+  "marketJargon": {
+    "{{termo do nicho}}": "{{o que significa}}"
+  },
+  "verifiedClaims": [
+    "{{afirmações JÁ comprovadas — só estas podem ser enviadas}}"
+  ],
+  "unverifiedClaims": [
+    "{{afirmações a comprovar — BLOQUEADAS até virarem prova}}"
+  ],
+  "icpSegments": ["{{segmento 1}}", "{{segmento 2}}", "{{segmento 3}}"],
+  "icpKeywords": ["{{palavra 1}}", "{{palavra 2}}", "{{palavra 3}}"],
+  "affiliateTopics": ["{{tema 1}}", "{{tema 2}}"],
+  "geography": "{{região}}"
+}
