@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals'
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
 import type { Request, Response } from 'express'
 import { CrmController } from '@/controllers/CrmController'
 import {
@@ -25,21 +25,29 @@ function mockRes(): Response {
   return res as Response
 }
 
+function resetReadinessEnv(): void {
+  resetMemoryStore()
+  resetCircuitBreaker()
+  resetChromeCdpProbeOverride()
+  delete process.env['SUPABASE_URL']
+  delete process.env['SUPABASE_SERVICE_ROLE_KEY']
+  delete process.env['OPENAI_API_KEY']
+  delete process.env['INSTAGRAM_APP_SECRET']
+  delete process.env['INSTAGRAM_PAGE_ACCESS_TOKEN']
+  delete process.env['INSTAGRAM_LIVE_SEND']
+  delete process.env['CHROME_CDP_URL']
+  delete process.env['MAX_DMS_PER_DAY']
+  delete process.env['OPERATING_HOURS']
+  delete process.env['OPERATING_TIMEZONE']
+}
+
 describe('crm readiness', () => {
   beforeEach(() => {
-    resetMemoryStore()
-    resetCircuitBreaker()
-    resetChromeCdpProbeOverride()
-    delete process.env['SUPABASE_URL']
-    delete process.env['SUPABASE_SERVICE_ROLE_KEY']
-    delete process.env['OPENAI_API_KEY']
-    delete process.env['INSTAGRAM_APP_SECRET']
-    delete process.env['INSTAGRAM_PAGE_ACCESS_TOKEN']
-    delete process.env['INSTAGRAM_LIVE_SEND']
-    delete process.env['CHROME_CDP_URL']
-    delete process.env['MAX_DMS_PER_DAY']
-    delete process.env['OPERATING_HOURS']
-    delete process.env['OPERATING_TIMEZONE']
+    resetReadinessEnv()
+  })
+
+  afterEach(() => {
+    resetReadinessEnv()
   })
 
   it('reports false flags with empty env stubs and never echoes secrets', async () => {
