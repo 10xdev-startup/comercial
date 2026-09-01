@@ -15,6 +15,9 @@ const base: CrmReadiness = {
   pauseReason: null,
   webhookUrlHint: "https://SEU_DOMINIO/webhooks/instagram",
   webhookPath: "/webhooks/instagram",
+  maxDmsPerDay: 30,
+  operatingHours: "09:00-20:00",
+  operatingTimezone: "America/Sao_Paulo",
 }
 
 describe("ReadinessStrip", () => {

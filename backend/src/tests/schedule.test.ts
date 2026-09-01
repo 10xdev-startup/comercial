@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals'
-import { parseOperatingHours } from '@/config/rateLimits'
+import { parseOperatingHours, formatClockMinutes, formatOperatingHoursLabel } from '@/config/rateLimits'
 import { getZonedParts, nextAllowedSendAt, nextOperatingWindowStart, zonedTimeToUtc } from '@/worker/schedule'
 
 const config = {
@@ -46,5 +46,17 @@ describe('dm send schedule', () => {
 
   it('accepts 00:00-24:00 as always open', () => {
     expect(parseOperatingHours('00:00-24:00')).toEqual({ startMinutes: 0, endMinutes: 24 * 60 })
+  })
+
+  it('formats clock minutes including 24:00 for end-of-day', () => {
+    expect(formatClockMinutes(0)).toBe('00:00')
+    expect(formatClockMinutes(540)).toBe('09:00')
+    expect(formatClockMinutes(1200)).toBe('20:00')
+    expect(formatClockMinutes(1440)).toBe('24:00')
+  })
+
+  it('formats operating hours for the operator card', () => {
+    expect(formatOperatingHoursLabel({ startMinutes: 540, endMinutes: 1200 })).toBe('09:00-20:00')
+    expect(formatOperatingHoursLabel({ startMinutes: 0, endMinutes: 1440 })).toBe('00:00-24:00')
   })
 })

@@ -1,6 +1,6 @@
 import { describe, it, expect, jest } from "@jest/globals"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { FirstContactActions, SimulateInboundActions } from "@/app/(dashboard)/crm/leads/[id]/LeadDetail"
+import { FirstContactActions, FirstVisitHelper, SimulateInboundActions, WhatsappHandoff } from "@/app/(dashboard)/crm/leads/[id]/LeadDetail"
 
 describe("FirstContactActions", () => {
   it("mostra o botão de primeiro contato e o aviso de dry-run", () => {
@@ -17,6 +17,8 @@ describe("FirstContactActions", () => {
     )
     fireEvent.click(screen.getByRole("button", { name: "Enfileirar primeiro contato" }))
     expect(onEnqueue).toHaveBeenCalledTimes(1)
+    expect(screen.getByText("Passo 1 — Enfileirar primeiro contato")).toBeInTheDocument()
+    expect(screen.getByText(/Comece por aqui na primeira visita/)).toBeInTheDocument()
     expect(screen.getByText(/não clica em Enviar no Instagram/i)).toBeInTheDocument()
     expect(screen.getByText(/INSTAGRAM_LIVE_SEND=true/)).toBeInTheDocument()
   })
@@ -47,6 +49,27 @@ describe("SimulateInboundActions", () => {
     expect(onSimulate).toHaveBeenNthCalledWith(1, "question")
     expect(onSimulate).toHaveBeenNthCalledWith(2, "opt_in")
     expect(onSimulate).toHaveBeenNthCalledWith(3, "opt_out")
+    expect(screen.getByText("Passo 2 — Simular resposta do Instagram")).toBeInTheDocument()
+    expect(screen.getByText(/Depois do passo 1/)).toBeInTheDocument()
     expect(screen.getByText(/Sem Meta e sem Chrome/)).toBeInTheDocument()
+  })
+})
+
+describe("FirstVisitHelper", () => {
+  it("explica os dois passos sem Meta e sem Chrome", () => {
+    render(<FirstVisitHelper />)
+    expect(screen.getByTestId("first-visit-helper")).toHaveTextContent(
+      /Enfileirar primeiro contato \(dry-run\).*Simular pergunta \/ opt-in \/ opt-out/,
+    )
+    expect(screen.getByTestId("first-visit-helper")).toHaveTextContent(/sem Meta e sem Chrome/)
+  })
+})
+
+describe("WhatsappHandoff", () => {
+  it("mostra o wa.me do business config no botão e no texto", () => {
+    render(<WhatsappHandoff whatsappLink="https://wa.me/5531988965216" />)
+    const link = screen.getByRole("link", { name: "Encaminhar ao WhatsApp" })
+    expect(link).toHaveAttribute("href", "https://wa.me/5531988965216")
+    expect(screen.getByTestId("whatsapp-handoff-url")).toHaveTextContent("https://wa.me/5531988965216")
   })
 })

@@ -1,7 +1,7 @@
 import { describe, it, expect, jest } from "@jest/globals"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { CrmBoardView, type CrmBoardViewProps } from "@/app/(dashboard)/crm/CrmBoard"
-import type { ExperimentSummary, Lead } from "@/types/crm"
+import type { CrmReadiness, ExperimentSummary, Lead } from "@/types/crm"
 
 const lead: Lead = {
   id: "lead-1",
@@ -20,6 +20,23 @@ const lead: Lead = {
   lastContactedAt: null,
   createdAt: "2026-09-01T12:00:00.000Z",
   updatedAt: "2026-09-01T12:00:00.000Z",
+}
+
+const readiness: CrmReadiness = {
+  supabaseConfigured: false,
+  openaiKeyPresent: false,
+  instagramAppSecretPresent: false,
+  instagramPageTokenPresent: false,
+  instagramLiveSend: false,
+  chromeCdpConfigured: false,
+  chromeCdpReachable: false,
+  workerPaused: false,
+  pauseReason: null,
+  webhookUrlHint: "https://SEU_DOMINIO/webhooks/instagram",
+  webhookPath: "/webhooks/instagram",
+  maxDmsPerDay: 12,
+  operatingHours: "10:00-18:00",
+  operatingTimezone: "America/Fortaleza",
 }
 
 function boardProps(overrides: Partial<CrmBoardViewProps> = {}): CrmBoardViewProps {
@@ -198,5 +215,48 @@ describe("CrmBoardView", () => {
     expect(screen.getByText("Amostra insuficiente para declarar vencedor")).toBeInTheDocument()
     expect(screen.getByText(/control vs wa-first/)).toBeInTheDocument()
     expect(screen.getByText(/amostra 1\/20/)).toBeInTheDocument()
+  })
+
+  it("mostra teto de DMs e horário no card do sistema, só leitura", () => {
+    render(<CrmBoardView {...boardProps({ readiness })} />)
+    const card = screen.getByTestId("sistema-card")
+    expect(card).toHaveTextContent("Em execução")
+    expect(card).toHaveTextContent("12 DMs por dia")
+    expect(card).toHaveTextContent("Horário: 10:00-18:00 (America/Fortaleza)")
+    expect(card.querySelector("input")).toBeNull()
+    expect(screen.getByTestId("first-visit-board-helper")).toHaveTextContent(
+      /abra um lead e use Enfileirar primeiro contato/,
+    )
+    expect(screen.getByText("Nenhum job na fila.")).toBeInTheDocument()
+  })
+
+  it("mostra estado vazio do board e das colunas em PT-BR", () => {
+    const onDiscoverLeads = jest.fn()
+    const { rerender } = render(
+      <CrmBoardView
+        {...boardProps({
+          columns: {},
+          metrics: { leadCount: 0, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 },
+          onDiscoverLeads,
+        })}
+      />,
+    )
+    expect(screen.getByText("Nenhum lead ainda")).toBeInTheDocument()
+    expect(screen.getByText(/leads de demonstração/)).toBeInTheDocument()
+    const discoverButtons = screen.getAllByRole("button", { name: "Descobrir leads simulados" })
+    expect(discoverButtons.length).toBe(2)
+    fireEvent.click(discoverButtons[1]!)
+    expect(onDiscoverLeads).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <CrmBoardView
+        {...boardProps({
+          columns: { qualified: [{ ...lead, pipelineState: "qualified" }] },
+          metrics: { leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 },
+        })}
+      />,
+    )
+    expect(screen.getAllByText("Nenhum lead nesta etapa").length).toBeGreaterThan(0)
+    expect(screen.queryByText("Nenhum lead ainda")).not.toBeInTheDocument()
   })
 })

@@ -37,6 +37,9 @@ describe('crm readiness', () => {
     delete process.env['INSTAGRAM_PAGE_ACCESS_TOKEN']
     delete process.env['INSTAGRAM_LIVE_SEND']
     delete process.env['CHROME_CDP_URL']
+    delete process.env['MAX_DMS_PER_DAY']
+    delete process.env['OPERATING_HOURS']
+    delete process.env['OPERATING_TIMEZONE']
   })
 
   it('reports false flags with empty env stubs and never echoes secrets', async () => {
@@ -57,6 +60,9 @@ describe('crm readiness', () => {
     expect(snapshot.supabaseConfigured).toBe(false)
     expect(snapshot.webhookPath).toBe(WEBHOOK_PATH)
     expect(snapshot.webhookUrlHint).toBe(WEBHOOK_URL_HINT)
+    expect(snapshot.maxDmsPerDay).toBe(30)
+    expect(snapshot.operatingHours).toBe('09:00-20:00')
+    expect(snapshot.operatingTimezone).toBe('America/Sao_Paulo')
 
     const dumped = JSON.stringify(snapshot)
     expect(dumped).not.toContain('sk-secret-test-value')
@@ -105,5 +111,23 @@ describe('crm readiness', () => {
     const body = (res as Response & { body: { success: boolean; data: { webhookPath: string } } }).body
     expect(body.success).toBe(true)
     expect(body.data.webhookPath).toBe('/webhooks/instagram')
+  })
+
+  it('exposes daily DM cap and operating hours without echoing secrets', async () => {
+    process.env['MAX_DMS_PER_DAY'] = '12'
+    process.env['OPERATING_HOURS'] = '10:00-18:00'
+    process.env['OPERATING_TIMEZONE'] = 'America/Fortaleza'
+    process.env['OPENAI_API_KEY'] = 'sk-live-operator-secret'
+    process.env['CHROME_CDP_URL'] = 'http://cdp.internal:9222'
+
+    const snapshot = await collectReadiness()
+    expect(snapshot.maxDmsPerDay).toBe(12)
+    expect(snapshot.operatingHours).toBe('10:00-18:00')
+    expect(snapshot.operatingTimezone).toBe('America/Fortaleza')
+
+    const dumped = JSON.stringify(snapshot)
+    expect(dumped).not.toContain('sk-live-operator-secret')
+    expect(dumped).not.toContain('cdp.internal')
+    expect(dumped).not.toContain('9222')
   })
 })
