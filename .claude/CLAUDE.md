@@ -35,7 +35,7 @@
 
 ## Projeto
 
-**Meu Projeto** — descreva aqui o que o projeto faz.
+**10xMídia** — CRM comercial de clientes: conectar Meta Ads, Google Ads e planilhas, gerar o relatório com análise escrita por IA e acompanhar leads. Funil de clientes apenas (sem afiliados).
 
 - **Frontend**: Next.js 15, TypeScript, Tailwind CSS, shadcn/ui (Radix) — `frontend/`
 - **Backend**: Node.js, Express, TypeScript, Supabase (PostgreSQL) — `backend/`

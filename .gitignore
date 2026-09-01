@@ -15,3 +15,12 @@ graphify-out/cache/
 graphify-out/graph.html
 graphify-out/.graphify_*
 graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+
+# Identidade real do negócio e artefatos locais do operador
+config/business.json
+.chrome-profile/
+*.db
+data/
+backups/
+screenshots/
+traces/
