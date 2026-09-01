@@ -7,8 +7,8 @@ import { AuthProvider } from '@/hooks/useAuth'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Meu Projeto',
-  description: 'Descrição do projeto',
+  title: '10xMídia',
+  description: 'Conecte Meta Ads, Google Ads e planilhas, gere o relatório do cliente com análise escrita por IA e acompanhe leads no CRM.',
 }
 
 export default function RootLayout({
