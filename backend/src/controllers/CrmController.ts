@@ -4,7 +4,10 @@ import { isChannelState } from '@/domain/channel'
 import { isClientPipelineState } from '@/domain/pipeline'
 import { AppError } from '@/utils/AppError'
 import { sendOk } from '@/utils/apiResponse'
+import { isLiveSendEnabled } from '@/browser/flags'
+import { browserMaySend } from '@/domain/channelLock'
 import { AiUsageModel } from '@/models/AiUsageModel'
+import { enqueueDiscoverLeads, enqueueUniqueSend } from '@/worker/enqueueJobs'
 import { EarlyWinnerError, ExperimentModel } from '@/models/ExperimentModel'
 import { JobModel } from '@/models/JobModel'
 import { LeadModel } from '@/models/LeadModel'
@@ -16,6 +19,13 @@ function routeParam(value: string | string[] | undefined): string {
     throw new AppError(422, 'id e obrigatorio', 'INVALID_ID')
   }
   return value
+}
+
+async function assertSystemRunning(): Promise<void> {
+  const state = await SystemStateModel.get()
+  if (state.paused) {
+    throw new AppError(409, 'Sistema pausado. Retome no painel para enfileirar jobs.', 'SYSTEM_PAUSED')
+  }
 }
 
 function groupByPipeline(leads: Lead[]): Record<string, Lead[]> {
@@ -130,6 +140,28 @@ export const CrmController = {
     sendOk(res, { job }, 201)
   },
 
+  async enqueueFirstContact(req: Request, res: Response): Promise<void> {
+    await assertSystemRunning()
+    const id = routeParam(req.params['id'])
+    const lead = await LeadModel.findById(id)
+    if (!lead) throw new AppError(404, 'Lead nao encontrado', 'LEAD_NOT_FOUND')
+    if (lead.channelState === 'do_not_contact' || (await DoNotContactModel.has(lead.instagramHandle))) {
+      throw new AppError(409, 'Este perfil esta na lista de nao contato', 'DO_NOT_CONTACT')
+    }
+    const conversation = await LeadModel.getOrCreateConversation(lead.id)
+    if (!browserMaySend(conversation.channelOwner)) {
+      throw new AppError(409, 'Depois da resposta, o navegador nao envia neste fio', 'CHANNEL_LOCK')
+    }
+    const result = await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id })
+    sendOk(res, result, result.duplicate ? 200 : 201)
+  },
+
+  async enqueueDiscover(_req: Request, res: Response): Promise<void> {
+    await assertSystemRunning()
+    const result = await enqueueDiscoverLeads()
+    sendOk(res, result, result.duplicate ? 200 : 201)
+  },
+
   async jobs(_req: Request, res: Response): Promise<void> {
     const jobs = await JobModel.list()
     sendOk(res, { jobs })
@@ -239,6 +271,7 @@ export const CrmController = {
       howItWorks: config.howItWorks,
       revenueModel: config.revenueModel,
       geography: config.geography,
+      instagramLiveSend: isLiveSendEnabled(),
     })
   },
 }

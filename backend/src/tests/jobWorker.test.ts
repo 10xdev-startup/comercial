@@ -109,11 +109,18 @@ describe('job worker', () => {
     expect(first.duplicate).toBe(false)
   })
 
-  it('completes discover_leads without sending', async () => {
+  it('creates simulated ICP leads on discover_leads without sending yet', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
     await JobModel.enqueue({ type: 'discover_leads', payload: {} })
     expect(await tickOnce()).toBe('ran')
-    const jobs = await JobModel.list()
-    expect(jobs.every((job) => job.status === 'succeeded')).toBe(true)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+    const discover = (await JobModel.list()).find((job) => job.type === 'discover_leads')
+    expect(discover?.status).toBe('succeeded')
+    expect(await LeadModel.list()).not.toHaveLength(0)
+    const sends = (await JobModel.list()).filter((job) => job.type === 'send_first_dm')
+    expect(sends.length).toBeGreaterThan(0)
+    expect(sends.every((job) => job.status === 'pending')).toBe(true)
   })
 
   it('sends first contact through the fake CDP composer in dry-run', async () => {

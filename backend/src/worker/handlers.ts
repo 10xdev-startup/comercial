@@ -9,6 +9,7 @@ import { AiUsageModel } from '@/models/AiUsageModel'
 import { ExperimentModel } from '@/models/ExperimentModel'
 import { LeadModel } from '@/models/LeadModel'
 import { DoNotContactModel, SystemStateModel } from '@/models/SystemStateModel'
+import { discoverSimulatedLeads } from '@/worker/discoverLeads'
 import { recordCircuitEvent } from '@/observability/circuitBreaker'
 import { logEvent } from '@/observability/logger'
 import type { Lead } from '@/types/crm'
@@ -271,7 +272,7 @@ export async function handleJob(job: Job): Promise<JobResult> {
     case 'record_timeline':
       return handleRecordTimeline(job)
     case 'discover_leads':
-      logEvent('discover_leads_stub', { jobId: job.id })
+      await discoverSimulatedLeads()
       return completed()
     case 'interpret_reply':
       return handleInterpretReply(job)
