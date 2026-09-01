@@ -1,15 +1,57 @@
-import { describe, it, expect, beforeEach } from '@jest/globals'
+import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { readFileSync } from 'fs'
+import path from 'path'
 import { JobModel } from '@/models/JobModel'
 import { LeadModel } from '@/models/LeadModel'
-import { SystemStateModel } from '@/models/SystemStateModel'
+import { DoNotContactModel, SystemStateModel } from '@/models/SystemStateModel'
 import { resetMemoryStore } from '@/store/memoryStore'
+import { SKIPPED_DO_NOT_CONTACT } from '@/types/job'
 import { recoverAndTick, tickOnce } from '@/worker/loop'
+import { enqueueUniqueSend } from '@/worker/sendLock'
+
+function openHoursUtc(): void {
+  process.env['OPERATING_HOURS'] = '00:00-24:00'
+  process.env['OPERATING_TIMEZONE'] = 'UTC'
+  process.env['MAX_DMS_PER_DAY'] = '30'
+  process.env['MIN_SECONDS_BETWEEN_DMS'] = '0'
+  process.env['MAX_SECONDS_BETWEEN_DMS'] = '0'
+}
 
 describe('job worker', () => {
   beforeEach(() => {
     resetMemoryStore()
     delete process.env['SUPABASE_URL']
     delete process.env['SUPABASE_SERVICE_ROLE_KEY']
+    process.env['WORKER_RETRY_BACKOFF_MS'] = '0'
+    openHoursUtc()
+  })
+
+  it('claims the next due job and increments attempts', async () => {
+    const job = await JobModel.enqueue({ type: 'noop', payload: {} })
+    const claimed = await JobModel.claimNext('worker-a')
+    expect(claimed?.id).toBe(job.id)
+    expect(claimed?.status).toBe('running')
+    expect(claimed?.attempts).toBe(1)
+    expect(claimed?.lockedBy).toBe('worker-a')
+    expect(await JobModel.claimNext('worker-b')).toBeNull()
+  })
+
+  it('retries a failed job until the limit then dead-letters it', async () => {
+    const job = await JobModel.enqueue({
+      type: 'record_timeline',
+      payload: {},
+      maxAttempts: 2,
+    })
+    expect(await tickOnce()).toBe('ran')
+    const afterFirst = (await JobModel.list()).find((row) => row.id === job.id)
+    expect(afterFirst?.status).toBe('pending')
+    expect(afterFirst?.attempts).toBe(1)
+    expect(afterFirst?.lastError).toMatch(/leadId and body/)
+
+    expect(await tickOnce()).toBe('ran')
+    const afterSecond = (await JobModel.list()).find((row) => row.id === job.id)
+    expect(afterSecond?.status).toBe('dead_letter')
+    expect(afterSecond?.attempts).toBe(2)
   })
 
   it('processes a durable record_timeline job against the in-memory store', async () => {
@@ -43,5 +85,107 @@ describe('job worker', () => {
     expect(recovered).toBe(1)
     expect((await JobModel.list()).find((row) => row.id === job.id)?.status).toBe('pending')
     expect(await recoverAndTick()).toBe('ran')
+  })
+
+  it('returns the same job for a duplicate send lock', async () => {
+    const lead = await LeadModel.create({ instagramHandle: 'lock_me' })
+    const first = await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id })
+    const second = await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id })
+    expect(second.duplicate).toBe(true)
+    expect(second.job.id).toBe(first.job.id)
+    expect(first.duplicate).toBe(false)
+  })
+
+  it('completes discover_leads and interpret_reply stubs without sending', async () => {
+    await JobModel.enqueue({ type: 'discover_leads', payload: {} })
+    await JobModel.enqueue({ type: 'interpret_reply', payload: { leadId: 'none' } })
+    expect(await tickOnce()).toBe('ran')
+    expect(await tickOnce()).toBe('ran')
+    const jobs = await JobModel.list()
+    expect(jobs.every((job) => job.status === 'succeeded')).toBe(true)
+  })
+
+  it('stubs send_first_dm without calling fetch or Instagram', async () => {
+    const lead = await LeadModel.create({ instagramHandle: 'stub_send' })
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
+    const now = new Date('2026-09-01T12:00:00.000Z')
+    await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id, runAt: now.toISOString() })
+    expect(await tickOnce(now)).toBe('ran')
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+    const jobs = await JobModel.list()
+    expect(jobs[0]?.status).toBe('succeeded')
+    expect(jobs[0]?.lastError).toBeNull()
+    const messages = await LeadModel.listMessages(lead.id)
+    expect(messages).toHaveLength(0)
+  })
+
+  it('skips a send when the handle is do-not-contact and does not consume a dm slot', async () => {
+    const lead = await LeadModel.create({ instagramHandle: 'nao_mexer' })
+    await DoNotContactModel.add('nao_mexer', 'opt-out', 'test')
+    const now = new Date('2026-09-01T12:00:00.000Z')
+    await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id, runAt: now.toISOString() })
+    expect(await tickOnce(now)).toBe('ran')
+    const jobs = await JobModel.list()
+    expect(jobs[0]?.status).toBe('succeeded')
+    expect(jobs[0]?.lastError).toBe(SKIPPED_DO_NOT_CONTACT)
+    expect(await JobModel.countSucceededDmJobsSince('2026-09-01T00:00:00.000Z')).toBe(0)
+  })
+
+  it('defers send jobs outside operating hours without burning attempts', async () => {
+    process.env['OPERATING_HOURS'] = '09:00-20:00'
+    process.env['OPERATING_TIMEZONE'] = 'America/Sao_Paulo'
+    const lead = await LeadModel.create({ instagramHandle: 'fora_hora' })
+    const now = new Date('2026-09-01T23:30:00.000Z')
+    await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id, runAt: now.toISOString() })
+    expect(await tickOnce(now)).toBe('deferred')
+    const job = (await JobModel.list())[0]
+    expect(job?.status).toBe('pending')
+    expect(job?.attempts).toBe(0)
+    expect(job?.lastError).toBe('deferred:operating_hours')
+    expect(job?.runAt).toBe('2026-09-02T12:00:00.000Z')
+  })
+
+  it('defers a second dm until MIN_SECONDS_BETWEEN_DMS has elapsed', async () => {
+    process.env['MIN_SECONDS_BETWEEN_DMS'] = '90'
+    process.env['MAX_SECONDS_BETWEEN_DMS'] = '90'
+    const firstLead = await LeadModel.create({ instagramHandle: 'intervalo_a' })
+    const secondLead = await LeadModel.create({ instagramHandle: 'intervalo_b' })
+    const now = new Date('2026-09-01T12:00:00.000Z')
+    await enqueueUniqueSend({ type: 'send_first_dm', leadId: firstLead.id, runAt: now.toISOString() })
+    expect(await tickOnce(now)).toBe('ran')
+    await enqueueUniqueSend({ type: 'send_first_dm', leadId: secondLead.id, runAt: now.toISOString() })
+    expect(await tickOnce(now)).toBe('deferred')
+    const pending = (await JobModel.list()).find((job) => job.status === 'pending')
+    expect(pending?.lastError).toBe('deferred:min_interval')
+    expect(pending?.runAt).toBe(new Date(now.getTime() + 90_000).toISOString())
+    expect(pending?.attempts).toBe(0)
+  })
+
+  it('defers sends after MAX_DMS_PER_DAY to the next operating start', async () => {
+    process.env['MAX_DMS_PER_DAY'] = '2'
+    const now = new Date('2026-09-01T12:00:00.000Z')
+    const leads = [
+      await LeadModel.create({ instagramHandle: 'cap_a' }),
+      await LeadModel.create({ instagramHandle: 'cap_b' }),
+      await LeadModel.create({ instagramHandle: 'cap_c' }),
+    ]
+    for (const lead of leads) {
+      await enqueueUniqueSend({ type: 'send_first_dm', leadId: lead.id, runAt: now.toISOString() })
+    }
+    expect(await tickOnce(now)).toBe('ran')
+    expect(await tickOnce(now)).toBe('ran')
+    expect(await tickOnce(now)).toBe('deferred')
+    const pending = (await JobModel.list()).find((job) => job.status === 'pending')
+    expect(pending?.lastError).toBe('deferred:daily_cap')
+    expect(pending?.runAt).toBe('2026-09-02T00:00:00.000Z')
+  })
+
+  it('does not import Instagram, CDP or private-api clients in the worker', () => {
+    const files = ['loop.ts', 'handlers.ts', 'sendLock.ts', 'schedule.ts']
+    for (const file of files) {
+      const src = readFileSync(path.resolve(__dirname, '../worker', file), 'utf8')
+      expect(src.toLowerCase()).not.toMatch(/puppeteer|chrome-remote|instagram\.com|graph\.facebook|private.?api/)
+    }
   })
 })
