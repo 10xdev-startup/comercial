@@ -71,6 +71,11 @@ export function LeadDetail() {
           <span className="rounded-full bg-muted px-2 py-1">{pipelineLabel(lead.pipelineState)}</span>
           <span className="rounded-full bg-muted px-2 py-1">{channelLabel(lead.channelState)}</span>
           <span className="rounded-full bg-muted px-2 py-1">Canal dono: {conversation.channelOwner}</span>
+          {conversation.messagingWindowExpiresAt && (
+            <span className="rounded-full bg-muted px-2 py-1">
+              Janela API até {new Date(conversation.messagingWindowExpiresAt).toLocaleString("pt-BR")}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 pt-2">
           <Button asChild variant="outline" size="sm">

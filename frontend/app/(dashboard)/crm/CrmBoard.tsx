@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/showcase/blocks/EmptyState"
 import { crmService } from "@/services/crmService"
 import { ApiRequestError } from "@/services/apiErrors"
 import { channelLabel, pipelineLabel } from "@/lib/pipelineLabels"
-import { CLIENT_PIPELINE_ORDER, type BoardResponse, type JobSummary, type Lead, type SystemState } from "@/types/crm"
+import { CLIENT_PIPELINE_ORDER, type BoardResponse, type ExperimentSummary, type JobSummary, type Lead, type SystemState } from "@/types/crm"
 
 function LeadCard({ lead }: { lead: Lead }) {
   return (
@@ -29,6 +29,7 @@ export type CrmBoardViewProps = {
   metrics: BoardResponse["metrics"] | null
   status: SystemState | null
   jobs: JobSummary[]
+  experiments: ExperimentSummary[]
   error: string | null
   loading: boolean
   pausing: boolean
@@ -43,6 +44,7 @@ export function CrmBoardView({
   metrics,
   status,
   jobs,
+  experiments,
   error,
   loading,
   pausing,
@@ -83,7 +85,7 @@ export function CrmBoardView({
         </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Leads</p>
           <p className="mt-1 text-xl font-semibold">{totalLeads}</p>
@@ -91,6 +93,15 @@ export function CrmBoardView({
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Clientes ativos</p>
           <p className="mt-1 text-xl font-semibold">{metrics?.activeCustomerCount ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Custo de IA no mês</p>
+          <p className="mt-1 text-xl font-semibold">
+            US$ {(metrics?.aiCostUsdThisMonth ?? 0).toFixed(2)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            US$ {(metrics?.aiCostPerLead ?? 0).toFixed(4)} por lead
+          </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sistema</p>
@@ -160,6 +171,20 @@ export function CrmBoardView({
         </div>
       )}
 
+      {experiments.length > 0 && (
+        <section className="rounded-xl border border-border bg-card p-4">
+          <h2 className="text-sm font-semibold">Experimentos (uma variável por vez)</h2>
+          <ul className="mt-2 space-y-2 text-xs text-muted-foreground">
+            {experiments.map((experiment) => (
+              <li key={experiment.id}>
+                {experiment.name} · {experiment.status} · amostra {experiment.assignedCount}/{experiment.sampleSize}
+                {experiment.winner ? ` · vencedor ${experiment.winner}` : " · sem vencedor precoce"}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {jobs.length > 0 && (
         <section className="rounded-xl border border-border bg-card p-4">
           <h2 className="text-sm font-semibold">Fila de jobs</h2>
@@ -182,6 +207,7 @@ export function CrmBoard() {
   const [metrics, setMetrics] = useState<BoardResponse["metrics"] | null>(null)
   const [status, setStatus] = useState<SystemState | null>(null)
   const [jobs, setJobs] = useState<JobSummary[]>([])
+  const [experiments, setExperiments] = useState<ExperimentSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pausing, setPausing] = useState(false)
@@ -190,13 +216,19 @@ export function CrmBoard() {
 
   useEffect(() => {
     let active = true
-    void Promise.all([crmService.getBoard(), crmService.getStatus(), crmService.getJobs()]).then(
-      ([board, nextStatus, nextJobs]) => {
+    void Promise.all([
+      crmService.getBoard(),
+      crmService.getStatus(),
+      crmService.getJobs(),
+      crmService.getExperiments(),
+    ]).then(
+      ([board, nextStatus, nextJobs, nextExperiments]) => {
         if (!active) return
         setColumns(board.columns)
         setMetrics(board.metrics)
         setStatus(nextStatus)
         setJobs(nextJobs.jobs)
+        setExperiments(nextExperiments.experiments)
         setError(null)
         setLoading(false)
       },
@@ -257,6 +289,7 @@ export function CrmBoard() {
       metrics={metrics}
       status={status}
       jobs={jobs}
+      experiments={experiments}
       error={error}
       loading={loading}
       pausing={pausing}

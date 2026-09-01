@@ -27,9 +27,10 @@ describe("CrmBoardView", () => {
     render(
       <CrmBoardView
         columns={{ discovered: [lead] }}
-        metrics={{ leadCount: 1, activeCustomerCount: 0 }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
         status={{ paused: false, pauseReason: null, updatedAt: "2026-09-01T12:00:00.000Z" }}
         jobs={[]}
+        experiments={[]}
         error={null}
         loading={false}
         pausing={false}
@@ -45,6 +46,7 @@ describe("CrmBoardView", () => {
     expect(screen.queryByText("Afiliados")).not.toBeInTheDocument()
     expect(screen.queryByText("Entrou no grupo")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Pausar sistema" })).toBeInTheDocument()
+    expect(screen.getByText("Custo de IA no mês")).toBeInTheDocument()
   })
 
   it("pausa o sistema pelo botão", () => {
@@ -52,9 +54,10 @@ describe("CrmBoardView", () => {
     render(
       <CrmBoardView
         columns={{ discovered: [lead] }}
-        metrics={{ leadCount: 1, activeCustomerCount: 0 }}
+        metrics={{ leadCount: 1, activeCustomerCount: 0, aiCostUsdThisMonth: 0, aiCostPerLead: 0 }}
         status={{ paused: false, pauseReason: null, updatedAt: "2026-09-01T12:00:00.000Z" }}
         jobs={[]}
+        experiments={[]}
         error={null}
         loading={false}
         pausing={false}

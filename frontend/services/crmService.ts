@@ -1,5 +1,13 @@
 import { apiClient } from "@/services/apiClient"
-import type { BoardResponse, JobSummary, Lead, LeadDetailResponse, PublicCrmConfig, SystemState } from "@/types/crm"
+import type {
+  BoardResponse,
+  ExperimentSummary,
+  JobSummary,
+  Lead,
+  LeadDetailResponse,
+  PublicCrmConfig,
+  SystemState,
+} from "@/types/crm"
 
 export const crmService = {
   getBoard: () => apiClient.get<BoardResponse>("/crm/board"),
@@ -15,4 +23,5 @@ export const crmService = {
   setPaused: (paused: boolean, reason?: string) =>
     apiClient.post<SystemState>("/crm/pause", reason ? { paused, reason } : { paused }),
   getConfig: () => apiClient.get<PublicCrmConfig>("/crm/config"),
+  getExperiments: () => apiClient.get<{ experiments: ExperimentSummary[] }>("/crm/experiments"),
 }

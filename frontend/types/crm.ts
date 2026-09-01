@@ -68,6 +68,20 @@ export interface SystemState {
 export interface CrmMetrics {
   leadCount: number
   activeCustomerCount: number
+  aiCostUsdThisMonth: number
+  aiCostPerLead: number
+}
+
+export interface ExperimentSummary {
+  id: string
+  name: string
+  hypothesis: string
+  status: "draft" | "running" | "concluded"
+  controlVariant: string
+  variants: string[]
+  sampleSize: number
+  winner: string | null
+  assignedCount: number
 }
 
 export interface JobSummary {
