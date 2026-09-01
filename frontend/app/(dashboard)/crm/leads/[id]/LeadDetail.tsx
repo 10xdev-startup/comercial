@@ -26,6 +26,29 @@ export type FirstContactActionsProps = {
   onEnqueue: () => void
 }
 
+export function FirstVisitHelper() {
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="first-visit-helper">
+      Nesta ficha: 1) Enfileirar primeiro contato (dry-run). 2) Simular pergunta / opt-in / opt-out — sem Meta e sem Chrome.
+    </p>
+  )
+}
+
+export function WhatsappHandoff({ whatsappLink }: { whatsappLink: string }) {
+  return (
+    <div className="space-y-1">
+      <Button asChild size="sm">
+        <a href={whatsappLink} target="_blank" rel="noreferrer">
+          Encaminhar ao WhatsApp
+        </a>
+      </Button>
+      <p className="break-all text-xs text-muted-foreground" data-testid="whatsapp-handoff-url">
+        {whatsappLink}
+      </p>
+    </div>
+  )
+}
+
 export function FirstContactActions({
   paused,
   pauseReason,
@@ -37,6 +60,10 @@ export function FirstContactActions({
   const disabled = paused || !canEnqueue || enqueueing
   return (
     <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+      <p className="text-sm font-medium">Passo 1 — Enfileirar primeiro contato</p>
+      <p className="text-xs text-muted-foreground">
+        Comece por aqui na primeira visita. Dry-run: não precisa de Chrome nem de Meta.
+      </p>
       <Button type="button" size="sm" disabled={disabled} onClick={onEnqueue}>
         Enfileirar primeiro contato
       </Button>
@@ -71,10 +98,10 @@ export type SimulateInboundActionsProps = {
 export function SimulateInboundActions({ simulating, onSimulate }: SimulateInboundActionsProps) {
   return (
     <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
-      <p className="text-sm font-medium">Simular resposta do Instagram</p>
+      <p className="text-sm font-medium">Passo 2 — Simular resposta do Instagram</p>
       <p className="text-xs text-muted-foreground">
-        POST falso no webhook oficial. Sem Meta e sem Chrome: demonstra lock de canal, OpenAI/heurística e DNC.
-        O worker precisa estar rodando para interpretar a resposta.
+        Depois do passo 1. POST falso no webhook oficial. Sem Meta e sem Chrome: demonstra lock de canal,
+        OpenAI/heurística e DNC. O worker precisa estar rodando para interpretar a resposta.
       </p>
       <div className="flex flex-wrap gap-2">
         {SIMULATE_BUTTONS.map((item) => (
@@ -171,14 +198,9 @@ export function LeadDetail() {
               Abrir Instagram
             </a>
           </Button>
-          {config && (
-            <Button asChild size="sm">
-              <a href={config.whatsappLink} target="_blank" rel="noreferrer">
-                Encaminhar ao WhatsApp
-              </a>
-            </Button>
-          )}
+          {config && <WhatsappHandoff whatsappLink={config.whatsappLink} />}
         </div>
+        <FirstVisitHelper />
         <FirstContactActions
           paused={status?.paused === true}
           pauseReason={status?.pauseReason ?? null}

@@ -147,6 +147,9 @@ export function CrmBoardView({
         A descoberta simulada usa o ICP do arquivo de negócio e não abre o Instagram.
         O primeiro contato em dry-run não clica em Enviar, a menos que INSTAGRAM_LIVE_SEND esteja ligado.
       </p>
+      <p className="text-xs text-muted-foreground" data-testid="first-visit-board-helper">
+        Na primeira visita: abra um lead e use Enfileirar primeiro contato (dry-run), depois Simular pergunta / opt-in / opt-out. Sem Meta e sem Chrome.
+      </p>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-border bg-card p-4">
@@ -166,11 +169,21 @@ export function CrmBoardView({
             US$ {(metrics?.aiCostPerLead ?? 0).toFixed(4)} por lead
           </p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4" data-testid="sistema-card">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sistema</p>
           <p className="mt-1 text-xl font-semibold">{paused ? "Pausado" : "Em execução"}</p>
           {pauseLabel && (
             <p className="mt-1 text-xs text-muted-foreground">{pauseLabel}</p>
+          )}
+          {readiness && (
+            <>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {readiness.maxDmsPerDay} DMs por dia
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Horário: {readiness.operatingHours} ({readiness.operatingTimezone})
+              </p>
+            </>
           )}
         </div>
       </div>
@@ -206,10 +219,19 @@ export function CrmBoardView({
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando CRM…</p>
       ) : totalLeads === 0 ? (
-        <EmptyState
-          title="Nenhum lead ainda"
-          description="Cadastre um perfil para ver o kanban do funil de clientes."
-        />
+        paused ? (
+          <EmptyState
+            title="Nenhum lead ainda"
+            description="Na primeira carga o CRM pode inserir leads de demonstração (agência e dono de negócio) a partir do ICP, sem Instagram. Retome o sistema para descobrir leads simulados ou cadastre um @."
+          />
+        ) : (
+          <EmptyState
+            title="Nenhum lead ainda"
+            description="Na primeira carga o CRM pode inserir leads de demonstração (agência e dono de negócio) a partir do ICP, sem Instagram. Use Descobrir leads simulados ou cadastre um @."
+            actionLabel="Descobrir leads simulados"
+            onAction={onDiscoverLeads}
+          />
+        )
       ) : (
         <div className="flex min-h-[28rem] gap-3 overflow-x-auto pb-2">
           {CLIENT_PIPELINE_ORDER.map((state) => {
@@ -224,9 +246,15 @@ export function CrmBoardView({
                   <span className="text-xs tabular-nums text-muted-foreground">{items.length}</span>
                 </header>
                 <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                  {items.map((lead) => (
-                    <LeadCard key={lead.id} lead={lead} />
-                  ))}
+                  {items.length === 0 ? (
+                    <p className="px-1 py-6 text-center text-xs text-muted-foreground">
+                      Nenhum lead nesta etapa
+                    </p>
+                  ) : (
+                    items.map((lead) => (
+                      <LeadCard key={lead.id} lead={lead} />
+                    ))
+                  )}
                 </div>
               </section>
             )
@@ -355,9 +383,11 @@ export function CrmBoardView({
         )}
       </section>
 
-      {jobs.length > 0 && (
-        <section className="rounded-xl border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold">Fila de jobs</h2>
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold">Fila de jobs</h2>
+        {jobs.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">Nenhum job na fila.</p>
+        ) : (
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
             {jobs.slice(0, 8).map((job) => (
               <li key={job.id}>
@@ -366,8 +396,8 @@ export function CrmBoardView({
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
     </div>
   )
 }
