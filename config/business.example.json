@@ -1,0 +1,56 @@
+{
+  "ownerName": "Luiz Bertucci",
+  "ownerRole": "Fundador",
+  "companyName": "10xMídia",
+  "companyWebsite": "https://10xmidia.com.br",
+  "instagramHandle": "@luizbertuccis",
+  "whatsappLink": "https://wa.me/5531988965216",
+  "oneLinePitch": "Conecte Meta Ads, Google Ads e planilhas, gere o relatório do cliente com análise escrita por IA e acompanhe leads no CRM. Para agências, gestores e donos de negócio que anunciam.",
+  "howItWorks": [
+    "Conectar fontes",
+    "Unificar o período",
+    "Entregar análise revisada / mensagem"
+  ],
+  "revenueModel": "R$ 75 por cliente / mês (R$ 50 plataforma + R$ 25 créditos de IA), trial de 30 dias",
+  "marketJargon": {
+    "tráfego pago": "anúncios pagos em Meta Ads e Google Ads",
+    "CPL": "custo por lead",
+    "CRM": "gestão de relacionamento com o cliente"
+  },
+  "verifiedClaims": [
+    "Conectar Meta Ads, Google Ads e planilhas",
+    "Gerar o relatório do cliente com análise escrita por IA",
+    "Acompanhar leads no CRM",
+    "Criar projeto em 30 segundos (copy de marketing, não SLA)",
+    "Primeiro relatório em 30 segundos (copy de marketing, não SLA)",
+    "Trial de 30 dias",
+    "Preço R$ 75 por cliente / mês",
+    "Google Partner e Meta Business Partner aparecem como selos no site, não como certificados auditados por este produto"
+  ],
+  "unverifiedClaims": [
+    "10x mais produtivo",
+    "10x more productive",
+    "34% more leads",
+    "34% mais leads",
+    "18% CPL",
+    "ROI",
+    "hours to seconds",
+    "de horas para segundos",
+    "R$ 50 por cliente"
+  ],
+  "icpSegments": [
+    "agência",
+    "gestor de tráfego",
+    "autônomo",
+    "dono de negócio"
+  ],
+  "icpKeywords": [
+    "tráfego pago",
+    "Meta Ads",
+    "Google Ads",
+    "relatório",
+    "CRM",
+    "WhatsApp"
+  ],
+  "geography": "Brasil"
+}

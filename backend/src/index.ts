@@ -3,7 +3,9 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { sendOk } from '@/utils/apiResponse'
 import { userRoutes } from '@/routes/userRoutes'
+import { crmRoutes } from '@/routes/crmRoutes'
 import { errorHandler } from '@/middleware'
+import { startWorkerLoop } from '@/worker/loop'
 
 // Unico ponto de carga da env no backend. `override: true` NAO e detalhe: sem ele
 // o dotenv preserva o que ja existe no ambiente, e um `export SUPABASE_URL=...` no
@@ -26,10 +28,15 @@ app.get('/health', (_req, res) => {
 
 // Dominio de referencia: usuario (Controller → Model → Database).
 app.use('/users', userRoutes)
+app.use('/crm', crmRoutes)
 
 // Handler de erro central — por ULTIMO, depois das rotas (serializa AppError no envelope).
 app.use(errorHandler)
 
 app.listen(PORT, () => {
   console.log(`Server rodando na porta ${PORT}`)
+  if (process.env['WORKER_ENABLED'] !== 'false' && process.env['NODE_ENV'] !== 'test') {
+    startWorkerLoop()
+    console.log('Worker de jobs iniciado (tabela jobs, sem Redis)')
+  }
 })

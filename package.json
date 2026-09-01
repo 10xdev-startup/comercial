@@ -1,5 +1,5 @@
 {
-  "name": "meu-projeto",
+  "name": "comercial",
   "version": "1.0.0",
   "private": true,
   "workspaces": [
@@ -10,7 +10,8 @@
     "dev": "concurrently --kill-others-on-fail --names backend,frontend --prefix-colors cyan,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces",
-    "lint": "npm run lint --workspaces"
+    "lint": "npm run lint --workspaces",
+    "apply:crm-schema": "node scripts/apply-crm-schema.mjs"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
