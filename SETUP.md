@@ -60,6 +60,16 @@ npm run dev
 
 Sem credenciais reais do Supabase, o CRM usa store em memória (some ao reiniciar). Com credenciais + schema aplicado, persiste no Postgres.
 
+## 3.1 Comece sem o Chrome (iniciante)
+
+Você **não** precisa ligar o Chrome agora. Depois de `npm run dev`:
+
+1. Abra o CRM.
+2. Clique em **Descobrir leads simulados** (cria perfis de exemplo a partir do ICP, sem abrir o Instagram).
+3. Abra um lead e clique em **Enfileirar primeiro contato**.
+
+O worker usa o fake CDP e **não** clica em Enviar. Quando for usar o Instagram de verdade, use o comando Linux da seção 7 e deixe `INSTAGRAM_LIVE_SEND=false` até ter certeza.
+
 ## 4. Pausa geral
 
 No painel, **Pausar sistema** grava `system_state.paused`. O worker deixa de reivindicar jobs até retomar.
