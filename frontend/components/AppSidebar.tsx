@@ -18,6 +18,7 @@ type SidebarMode = 'expanded' | 'collapsed' | 'hover'
 
 const NAV_ITEMS = [
   { href: '/inicio', title: 'Início', icon: '🏠' },
+  { href: '/crm', title: 'CRM', icon: '📋' },
   { href: '/componentes', title: 'Componentes', icon: '🧩' },
 ]
 
@@ -140,7 +141,7 @@ function AppSidebar() {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     onClick={() => router.push(item.href)}
-                    isActive={pathname === item.href}
+                    isActive={pathname === item.href || (item.href !== '/inicio' && pathname.startsWith(`${item.href}/`))}
                     tooltip={item.title}
                   >
                     <span className="text-base">{item.icon}</span>
